@@ -1,0 +1,29 @@
+{
+  "name": "media-telegram-manager-bot",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsc && node --import=extensionless/register ./dist"
+  },
+  "dependencies": {
+    "human-format": "^1.2.1",
+    "jsonschema": "^1.5.0",
+    "node-telegram-bot-api": "0.63.0",
+    "parse-torrent": "^11.0.18",
+    "uuid": "^11.0.5",
+    "webtorrent": "2.5.12",
+    "busboy": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/busboy": "^1.5.4",
+    "@types/jsonschema": "^1.1.1",
+    "@types/lodash": "^4.17.14",
+    "@types/node": "^22.10.6",
+    "@types/node-telegram-bot-api": "^0.64.7",
+    "@types/parse-torrent": "^5.8.7",
+    "@types/uuid": "^10.0.0",
+    "@types/webtorrent": "^0.110.0"
+  }
+}

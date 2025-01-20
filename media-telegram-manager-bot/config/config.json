@@ -1,0 +1,60 @@
+{
+    "nodeId": "fb018793-247c-4e22-9a3f-b5515cb299c3",
+    "postProcessing": {
+        "enabled": true,
+        "gateways": ["http://127.0.0.1:1949"],
+        "categories": {
+            "movies": {
+                "resolutions": [ "720p", "1080p", "2160p" ],
+                "allowedsubs": {
+                    "contains": [ "RU", "Rus", "ru", "rus", "Рус", "ру", "рус", "Россия", "россия" ]
+                },
+                "allowedaudio": {
+                    "contains": [ "RU", "Rus", "ru", "rus", "Рус", "ру", "рус", "Россия", "россия" ]
+                }
+            },
+            "tv": {
+                "resolutions": [ "720p", "1080p" ],
+                "allowedsubs": {
+                    "contains": [ "RU", "Rus", "ru", "rus", "Рус", "ру", "рус", "Россия", "россия" ]
+                },
+                "allowedaudio": {
+                    "contains": [ "RU", "Rus", "ru", "rus", "Рус", "ру", "рус", "Россия", "россия" ]
+                }
+            }
+        }
+    },
+    "categories": {
+        "movies": {
+            "ext":  [ ".mov", ".avi", ".mkv", ".mp4" ],
+            "name": "Фильмы"
+        },
+        "tv": {
+            "ext":  [ ".mov", ".avi", ".mkv", ".mp4" ],
+            "name": "Сериалы",
+            "additional": {
+                "message": "Введите номер сезона от 0 до 99.",
+                "processor": "return \"Season \" + (input.length !== 2 ? input.padStart(2, \"0\") : input)",
+                "schema": {
+                    "minLength": 1,
+                    "maxLength": 2,
+                    "pattern": "^\\d+$",
+                    "type": "string"
+                }
+            }
+        },
+        "music": {
+            "ext":  [ ".mp3", ".flac" ],
+            "name": "Музыка",
+            "additional": {
+                "message": "Введите наименование альбома.",
+                "processor": "return input",
+                "schema": {
+                    "minLength": 3,
+                    "maxLength": 100,
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

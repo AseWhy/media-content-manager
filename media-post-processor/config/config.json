@@ -1,0 +1,46 @@
+{
+    "processing": {
+        "movies": {
+            "filenameFunction": "return filename.replace(/_?\\d+p_?/, '_') + ' ' + name + ext",
+            "additinalParams": ["-crf", 17],
+            "outputs": [
+                {
+                    "resolution": [ 1280, 720 ],
+                    "codec": "libx265",
+                    "preset": "fast",
+                    "name": "720p"
+                },
+                {
+                    "resolution": [ 1920, 1080 ],
+                    "codec": "libx265",
+                    "preset": "fast",
+                    "name": "1080p"
+                },
+                {
+                    "resolution": [ 4096, 2160 ],
+                    "codec": "libx265",
+                    "preset": "fast",
+                    "name": "2160p"
+                }
+            ]
+        },
+        "tv": {
+            "filenameFunction": "return filename.replace(/_?\\d+p_?/, '_') + ' ' + name + ext",
+            "additinalParams": ["-crf", 20],
+            "outputs": [
+                {
+                    "resolution": [ 1280, 720 ],
+                    "codec": "libx265",
+                    "preset": "superfast",
+                    "name": "720p"
+                },
+                {
+                    "resolution": [ 1920, 1080 ],
+                    "codec": "libx265",
+                    "preset": "superfast",
+                    "name": "1080p"
+                }
+            ]
+        }
+    }
+}
