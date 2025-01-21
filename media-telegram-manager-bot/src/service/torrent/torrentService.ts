@@ -1,9 +1,9 @@
 import { EventEmitter } from "events";
 import { FSDB } from "file-system-db";
-import { TorrentAdditionalData, TorrentData } from "./torrentData";
-import { join } from "path";
+import { TorrentAdditionalData, TorrentData, TorrentFileData } from "./torrentData";
+import { extname, join, parse } from "path";
 import { hash } from "crypto";
-import { CONFIG, ConfigCategoryName, DOWNLOAD_LIMIT, MANAGED_DIR } from "../../constants";
+import { CONFIG, ConfigCategoryName, DOWNLOAD_DIR, DOWNLOAD_LIMIT } from "../../constants";
 import { saveFile } from "./torrentFileSaver";
 import { Service } from "typedi";
 
@@ -69,21 +69,22 @@ export class TorrentService extends EventEmitter {
      */
     private _addToDownload(hash: string, data: TorrentStoredData): Promise<TorrentData> {
         return new Promise((res, rej) => {
-            const torrentData = new TorrentData(TORRENT_CLIENT.add(data.magnet), hash, data.data);
+            const category = CONFIG.categories[data.category];
+            const torrentData = new TorrentData(TORRENT_CLIENT.add(data.magnet, { path: DOWNLOAD_DIR }), category, hash, data.data);
 
             // Пиры не найдены
             torrentData.on("noPeers", () => {
                 // Уведомляем что пиры не найдены
-                res(torrentData);
+                return res(torrentData);
             });
 
             // Получение информации о торренте
             torrentData.on("metadata", () => {
-                if (torrentData.getFiles(CONFIG.categories[data.category]).length === 0) {
+                if (torrentData.files.length === 0) {
                     torrentData.destroy();
-                    rej(new TorrentError("Не найдено подходящих для загрузки файлов. "));
+                    return rej(new TorrentError("Не найдено подходящих для загрузки файлов. "));
                 } else {
-                    res(torrentData);
+                    return res(torrentData);
                 }
             });
 
@@ -93,17 +94,20 @@ export class TorrentService extends EventEmitter {
                     this.emit("download", torrentData, data);
                 }
             });
-            
+
             // Действие при завершении загрузки
             torrentData.on("done", async () => {
-                await Promise.all(torrentData.getFiles(CONFIG.categories[data.category])
-                    .map(({ path }) => {
-                        let destinationDir = join(MANAGED_DIR, data.category, data.name);
-                        if (data.dir) {
-                            destinationDir = join(destinationDir, data.dir);
-                        }
-                        return saveFile(data.category, path, destinationDir);  
-                    }));
+                const { filenameProcessor: filenameProcessorStr } = category;
+                const filenameProcessor = new Function("filename", "name", "i", "ext", filenameProcessorStr);
+
+                await Promise.all(torrentData.files.map(({ path }, i) => {
+                    let destinationDir = join(data.category, data.name);
+                    if (data.dir) {
+                        destinationDir = join(destinationDir, data.dir);
+                    }
+                    const { name, ext } = parse(path);
+                    return saveFile(data.category, path, destinationDir, filenameProcessor(name, data.name, i, ext));  
+                }));
 
                 this.emit("done", torrentData, data);
                 this._markTorrentAsDownloaded(hash);

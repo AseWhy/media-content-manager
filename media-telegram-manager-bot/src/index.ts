@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import './context';
 
 import { Container } from "typedi";
-import { BOT_ALLOWED_USER_IDS, BOT_TOKEN, CONFIG, DOWNLOAD_LIMIT, MANAGED_DIR } from "./constants";
+import { BOT_ALLOWED_USER_IDS, BOT_TOKEN, CONFIG, DOWNLOAD_DIR, DOWNLOAD_LIMIT, MANAGED_DIR, PROCESSOR_DIR, PULL_INTERVAL } from "./constants";
 import { filesDelete, KEYBOARD_PREFIX as DELETE_FILES_KEYBOARD_PREFIX, filesDeleteConfirmed } from "./listeners/filesDelete";
 import { filesList, filesListPagable, KEYBOARD_PREFIX as LIST_FILES_KEYBOARD_PREFIX } from "./listeners/filesList";
 import { filesMove, filesMovePagable, KEYBOARD_PREFIX as MOVE_FILES_KEYBOARD_PREFIX } from "./listeners/filesMove";
@@ -16,7 +16,10 @@ import TelegramBot from 'node-telegram-bot-api';
 
 // Выводим значения переменных
 console.log("MANAGED_DIR", "\t\t", MANAGED_DIR);
-console.log("BOT_TOKEN", "\t\t", BOT_TOKEN);
+console.log("DOWNLOAD_DIR", "\t\t", DOWNLOAD_DIR);
+console.log("PROCESSOR_DIR", "\t\t", PROCESSOR_DIR);
+console.log("PULL_INTERVAL", "\t\t", PULL_INTERVAL);
+console.log("BOT_TOKEN", "\t\t", BOT_TOKEN.replace(/./g, '*'));
 console.log("DOWNLOAD_LIMIT", "\t\t", DOWNLOAD_LIMIT);
 console.log("BOT_ALLOWED_USER_IDS", "\t", BOT_ALLOWED_USER_IDS);
 console.log("CONFIG", "\t", CONFIG);

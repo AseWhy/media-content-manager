@@ -1,19 +1,20 @@
-import { CONFIG, ConfigCategoryName } from "../../constants";
+import { CONFIG, ConfigCategoryName, PROCESSOR_DIR, PULL_INTERVAL } from "../../constants";
 import { Service } from "typedi";
 import { FSDB } from "file-system-db";
 import { v7 } from "uuid";
 import { basename, join } from "path";
-import { tmpdir } from "os";
+import { createReadStream } from "fs";
 import { createWriteStream, existsSync } from "fs";
 import { mkdir, rm } from "fs/promises";
+import { json } from "stream/consumers";
+import { form, fetch } from "../http";
+import { getSystemErrorName } from "util";
+import { Writable } from "stream";
+import { IncomingMessage } from "http";
 
 import busboy from "busboy";
-import fetch, { blobFrom, FetchError, FormData } from "node-fetch";
 import EventEmitter from "events";
-import { Agent } from "http";
-
-/** Интервал обновления данных */
-const PULL_INTERVAL = 15000;
+import FormData from "form-data";
 
 /** База данных обработчика */
 const DATABASE = new FSDB("./data/post-processing.json", false);
@@ -39,7 +40,7 @@ export class ProcessingService extends EventEmitter {
     /**
      * Инициализирует сервис постобработки
      */
-    public async init() {
+    public async init(): Promise<void> {
         if (!CONFIG.postProcessing.enabled) {
             return;
         }
@@ -49,32 +50,41 @@ export class ProcessingService extends EventEmitter {
     /**
      * Добавляет заказ на постобработку
      * @param order заказ
+     * @param name  имя файла, под которым он будет сохранен после обработки
      */
-    async process({ type, path }: PostProcessOrder) {
-        const data = new FormData();
+    async process({ type, path }: PostProcessOrder, name: string): Promise<void> {
+        console.log(`Отправка медиафайла "${path.source}"[${name}] на постобработку`);
 
-        data.append("file", await blobFrom(path.source), basename(path.source));
-
-        const url = `/add-media/${CONFIG.nodeId}/${type}`;
-        const init = { method: "POST", body: data, agent: new Agent({ timeout: 0 }) };
-
-        console.log(`Отправка "${path.source}" на постобработку`);
-
-        for (const gateway of this._gateways) {
+        for (const gateway of CONFIG.postProcessing.gateways) {
             try {
-                const response = await fetch(gateway + url, init);
-                if (response.status !== 200) {
-                    throw new Error("Неожиданный ответ сервера постобработки '" + response.statusText + "'");
+                const data = new FormData();
+
+                data.append("file", createReadStream(path.source), encodeURIComponent(name));
+
+                const response = await form(`${gateway}/add-media/${CONFIG.nodeId}/${type}`, data)
+
+                if (response.statusCode !== 200) {
+                    throw new Error("Неожиданный ответ сервера постобработки '" + response.statusCode + "'");
                 }
 
-                const { result: { result, id } }: any = await response.json();
+                console.log(`Медиафайл "${path.source}" успешно отправлен на постобработку`);
+                
+                const { result: { result, id } }: any = await json(response);
+                
+                console.log(`Медиафайл "${gateway}" успешно отправлен на узел. Идентификатор обработки ${id}`);
 
-                if (result === 'success') {
-                    DATABASE.set(`processing.${id}`, { type, path });
-                    return;
+                if (result !== 'success') {
+                    continue
                 }
+
+                DATABASE.set(`processing.${id}`, { type, path });
+
+                return;
             } catch(e) {
-                if (e instanceof FetchError && (e.code === 'ECONNREFUSED' || e.code === 'ECONNRESET')) {
+                // Выводим ошибку в любом случае
+                console.error(`Ошибка при отправке запроса на узел '${gateway}'`, e);
+                // В случае ошибок сокета
+                if (getSystemErrorName(e.errno)) {
                     continue;
                 } else {
                     throw e;
@@ -86,22 +96,23 @@ export class ProcessingService extends EventEmitter {
     /**
      * Выполняет регистрацию на узлах пост-обработчика
      */
-    private async _registration() {
-        const body = JSON.stringify({
-            config: CONFIG.postProcessing.categories
-        });
-        const headers = new Headers();
-        headers.set("Content-Type", "application/json");
+    private async _registration(): Promise<void> {
         for (const gateway of CONFIG.postProcessing.gateways) {
             try {
-                const response = await fetch(`${gateway}/register/${CONFIG.nodeId}`, { method: "POST", body, headers });
-                if (response.status === 200) {
-                    this._gateways.push(gateway);
+                const response = await fetch(`${gateway}/register/${CONFIG.nodeId}`, {
+                    method: "POST",
+                    body: { config: CONFIG.postProcessing.categories }
+                });
+                if (response.statusCode !== 200) {
+                    continue;
                 }
+                this._gateways.push(gateway);
             } catch (e) {
                 console.error(`Ошибка подключения к '${gateway}'`, e.message);
             }
         }
+
+        console.log("Для пост обработки используются узлы", this._gateways);
     }
 
     /**
@@ -109,79 +120,91 @@ export class ProcessingService extends EventEmitter {
      * @param files список файлов результата постобработки
      * @param data  дополнительные данные
      */
-    private async _onDone(files: string[], { _id: id }: Record<string, string>) {
+    private async _onDone(files: string[], { _id: id }: Record<string, string>): Promise<void> {
         if (id === null) {
             console.warn("Идентиификатор не передан");
         } else {
             const order = DATABASE.get(`processing.${id}`);
             const listenerData = { order, files };
 
+            console.log(`Получены обработанные файлы для заказа ${id}`, files, order);
+
             for (const listener of this.listeners("done")) {
                 await listener(listenerData);
             }
+
+            DATABASE.delete(`processing.${id}`);
         }
+    }
+
+    /**
+     * Обрабатывает данные полученные из запроса вытягивания
+     * @param gateway  адрес узла для запроса
+     * @param response ответ на запрос вытягивания
+     */
+    private _prcessPull(gateway: string, response: IncomingMessage): Promise<void> {
+        return new Promise<void>(async (res, rej) => {
+            const bb = busboy({ headers: response.headers });
+            const tmpDir = join(PROCESSOR_DIR, v7());
+            const files: string[] = [];
+            const data: Record<string, string> = {};
+
+            if (!existsSync(tmpDir)) {
+                await mkdir(tmpDir, { recursive: true });
+            }
+
+            bb.on("file", (name, stream, info) => {
+                const newFilePath = join(tmpDir, decodeURIComponent(info.filename));
+                files.push(newFilePath);
+                stream.pipe(createWriteStream(newFilePath));
+            });
+
+            bb.on("field", (name, value) => {
+                data[name] = value;
+            });
+
+            bb.once("finish", async () => {
+                await this._onDone(files, data);
+                await rm(tmpDir, { recursive: true });
+            });
+
+            bb.once("error", async err => {
+                await rm(tmpDir, { recursive: true });
+                rej(err);
+            });
+
+            bb.on("close", res);
+
+            if (response) {
+                response.pipe(bb);
+            } else {
+                return rej(new Error(`Запрос на ${gateway} вернул неожиданный ответ, не содержащий тела ответа`));
+            }
+        });
     }
 
     /**
      * Выполняет запрос новых элементов обработчика
      */
-    private async _pull() {
+    private async _pull(): Promise<void> {
         let activated = false;
         for (const gateway of this._gateways) {
             try {
                 const response = await fetch(`${gateway}/pull/${CONFIG.nodeId}`, { method: "GET" });
 
-                if (response.status !== 200 || response.headers.get("content-length") === '0') {
-                    continue;
+                if (response.statusCode === 200 && response.headers["content-length"] !== '0') {
+                    console.log("Обработка ответа данных с узла", gateway);
+    
+                    await this._prcessPull(gateway, response);
+    
+                    activated = true;
                 }
-
-                await new Promise<void>(async (res, rej) => {
-                    const headers = Object.fromEntries(Object.entries(response.headers.raw()).map(([ key, value ]) =>
-                        [ key, value.join("") ]));
-                    const bb = busboy({ headers });
-                    const tmpDir = join(tmpdir(), v7());
-                    const files: string[] = [];
-                    const data: Record<string, string> = {};
-
-                    if (!existsSync(tmpDir)) {
-                        await mkdir(tmpDir, { recursive: true });
-                    }
-
-                    bb.on("file", (name, stream, info) => {
-                        const newFilePath = join(tmpDir, info.filename);
-                        files.push(newFilePath);
-                        stream.pipe(createWriteStream(newFilePath));
-                    });
-
-                    bb.on("field", (name, value) => {
-                        data[name] = value;
-                    });
-
-                    bb.once("finish", async () => {
-                        await this._onDone(files, data);
-                        await rm(tmpDir, { recursive: true });
-                        res();
-                    });
-
-                    bb.once("error", async err => {
-                        await rm(tmpDir, { recursive: true });
-                        rej(err);
-                    });
-
-                    if (response.body) {
-                        response.body.pipe(bb);
-                    } else {
-                        console.error(`Запрос на ${gateway} вернул неожиданный ответ, не содержащий тела ответа`);
-                    }
-                });
-
-                activated = true;
             } catch(e) {
-                console.error(`Ошибка подключения к '${gateway}'`, e.message);
+                console.error(`Ошибка подключения к '${gateway}'`, e);
             }
         }
         // Выполняем следующий запрос
-        setTimeout(this._pull.bind(this), activated ? 0 : PULL_INTERVAL);
+        setTimeout(this._pull.bind(this), activated ? 1000 : PULL_INTERVAL);
     }
 }
 
