@@ -3,6 +3,8 @@ import { extname, join } from "path";
 import { Torrent } from "webtorrent";
 import { ConfigCategory } from "../../constants";
 
+import _ from "lodash";
+
 /** Дополнительные данные торрента */
 export type TorrentAdditionalData = Record<string, string | number>;
 
@@ -11,13 +13,29 @@ export type TorrentAdditionalData = Record<string, string | number>;
  */
 export class TorrentData {
 
+    /** Прогресс загрузки от 0 до 100 */
+    private _progress: number = 0;
+
+    /** Количество загруженных байт */
+    private _downloaded: number = 0;
+
+    /** Размер торрента в байтах */
+    private _size: number = 0;
+
+    /** Файлы торрента, подходящие под категорию */
+    private _files: TorrentFileData[] = [];
+
     /**
      * Конструктор
-     * @param _torrent торрент
-     * @param id       идентификатор загрузки
-     * @param data     дополнительные данные
+     * @param _torrent  торрент
+     * @param _category категория
+     * @param id        идентификатор загрузки
+     * @param data      дополнительные данные
      */
-    constructor(private readonly _torrent: Torrent, public readonly id: string, public readonly data: TorrentAdditionalData) {
+    constructor(private readonly _torrent: Torrent, private readonly _category: ConfigCategory, public readonly id: string,
+        public readonly data: TorrentAdditionalData) {
+        this.on("metadata", this._onMetadata.bind(this));
+        this.on("download", this._onProgress.bind(this));
     }
 
     /**
@@ -45,21 +63,21 @@ export class TorrentData {
      * Возвращает прогресс загрузки торрента
      */
     public get progress() {
-        return this._torrent.progress * 100;
+        return this._progress;
     }
 
     /**
      * Возвращает размер загруженных файлов в байтах
      */
     public get downloaded() {
-        return this._torrent.downloaded;
+        return this._downloaded;
     }
 
     /**
      * Возвращает размер загружаемых файлов в байтах
      */
     public get size() {
-        return this._torrent.length;
+        return this._size;
     }
 
     /**
@@ -73,22 +91,7 @@ export class TorrentData {
      * Возвращает файлы торрента
      */
     public get files() {
-        return this._torrent.files;
-    }
-
-    /**
-     * Возвращает список файлов торрента
-     */
-    public getFiles(category: ConfigCategory): TorrentFileData[] {
-        const result: TorrentFileData[] = [];
-        for (const file of this._torrent.files) {
-            const ext = extname(file.name);
-            if (!category.ext.includes(ext)) {
-                continue;
-            }
-            result.push(new TorrentFileData(join(this._torrent.path, file.path), file.name, file.progress * 100, file.downloaded, file.length));
-        }
-        return result;
+        return this._files;
     }
 
     /**
@@ -141,6 +144,64 @@ export class TorrentData {
     public on(event: any, callback: any): this {
         this._torrent.on(event, callback);
         return this;
+    }
+
+    /**
+     * Действие при получении метаданных загрузки
+     */
+    private _onMetadata(): void {
+        let progress = 0;
+
+        for (const file of this._torrent.files) {
+            const ext = extname(file.name);
+
+            if (this._category.ext.includes(ext)) {
+                const fileData = new TorrentFileData(join(this._torrent.path, file.path), file.name, file.progress * 100,
+                    file.downloaded, file.length);
+
+                progress += fileData.progress;
+    
+                this._downloaded += fileData.downloaded;
+                this._size += fileData.size;
+    
+                this._files.push(fileData);
+            } else {
+                // Исключаем файл из загрузок
+                file.deselect();
+            }
+        }
+
+        this._progress = progress / this._files.length;
+    }
+
+    /**
+     * Действие при обновлении прогресса загрузки
+     */
+    private _onProgress(): void {
+        this._files.splice(0, this._files.length);
+
+        this._downloaded = 0;
+        this._size = 0;
+
+        let progress = 0;
+
+        for (const file of this._torrent.files) {
+            const ext = extname(file.name);
+
+            if (this._category.ext.includes(ext)) {
+                const fileData = new TorrentFileData(join(this._torrent.path, file.path), file.name, file.progress * 100,
+                    file.downloaded, file.length);
+
+                progress += fileData.progress;
+    
+                this._downloaded += fileData.downloaded;
+                this._size += fileData.size;
+    
+                this._files.push(fileData);
+            }
+        }
+
+        this._progress = progress / this._files.length;
     }
 }
 

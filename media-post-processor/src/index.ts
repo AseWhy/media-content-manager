@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 
-import { MediaPostProcessor } from "./service/mediaPostProcessor";
+import { MediaPostProcessor } from "./service/postprocessing/mediaPostProcessor";
 import { CustomerRegistry } from "./service/customerRegistry";
-import { ProcessingType } from "./contants";
+import { APP_PORT, PENDING_DIR, ProcessingType } from "./contants";
 import { Container } from "typedi";
 import { basename } from 'path';
 import { createReadStream } from 'fs';
@@ -18,29 +18,30 @@ import FormData from 'form-data';
 const APP = express();
 
 /** Директория загрузки */
-const UPLOAD = multer({ dest: '/tmp' })
+const UPLOAD = multer({ dest: PENDING_DIR });
 
 // Получение следующего элемента
 APP.get("/pull/:customer", async (req, response) => {
-    Container.get(MediaPostProcessor).pullCompleted(completed => {
+    Container.get(MediaPostProcessor).pullCompleted(req.params.customer, completed => {
         return new Promise((res, rej) => {
             const form = new FormData();
 
             form.append("_id", completed.id);
 
             for (const current of completed.result) {
-                form.append("files", createReadStream(current), basename(current));
+                form.append("files", createReadStream(current), encodeURIComponent(basename(current)));
             }
 
             const pipe = form.pipe(response.setHeader("Content-Type", `multipart/form-data; boundary=${form.getBoundary()}`));
-        
+
             // При завершении обработки удаляем все файлы
-            pipe.on("finish", async () => {
-                await rm(completed.directory, { recursive: true });
-            });
+            pipe.on("finish", () => rm(completed.directory, { recursive: true }).then(res));
 
             // При ошибке выбрасываем исключение
             pipe.on("error", rej);
+
+            // При закрытии соединения отбрасываем
+            response.on("unpipe", res);
         })
     }, () => response.end())
 });
@@ -71,7 +72,7 @@ APP.post("/add-media/:customer/:type", UPLOAD.single("file"), (req, res) => {
     const customerRegistry = Container.get(CustomerRegistry);
     const result = postProcessor.process({
         customer: req.params.customer,
-        name: file.filename,
+        name: decodeURIComponent(file.originalname),
         pathToMedia: file.path,
         type,
         config: customerRegistry.get(req.params.customer).config[type]
@@ -81,14 +82,22 @@ APP.post("/add-media/:customer/:type", UPLOAD.single("file"), (req, res) => {
     res.end();
 });
 
-// Слушаем на порту 1949
-const SERVER = APP.listen(1949, () => {    
+// Слушаем на порту APP_PORT
+const SERVER = APP.listen(APP_PORT, () => {
+    // Реагируем на событие отключения
     process.once("exit",                SERVER.close.bind(SERVER));
     process.once("SIGINT",              SERVER.close.bind(SERVER));
     process.once("SIGUSR1",             SERVER.close.bind(SERVER));
     process.once("SIGUSR2",             SERVER.close.bind(SERVER));
     process.once("uncaughtException",   SERVER.close.bind(SERVER));
+
+    // Уведомляем о запуске
+    console.log(`Обработчик запущен на порту ${APP_PORT}`);
 });
+
+// Устанавливаем тайм-ауты
+SERVER.headersTimeout = 0;
+SERVER.requestTimeout = 0;
 
 // Отображаем ошибки
 process.once("uncaughtException", console.error);

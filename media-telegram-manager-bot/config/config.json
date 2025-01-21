@@ -2,7 +2,7 @@
     "nodeId": "fb018793-247c-4e22-9a3f-b5515cb299c3",
     "postProcessing": {
         "enabled": true,
-        "gateways": ["http://127.0.0.1:1949"],
+        "gateways": ["http://192.168.0.244:1949"],
         "categories": {
             "movies": {
                 "resolutions": [ "720p", "1080p", "2160p" ],
@@ -27,14 +27,16 @@
     "categories": {
         "movies": {
             "ext":  [ ".mov", ".avi", ".mkv", ".mp4" ],
+            "filenameProcessor": "return `${name}${i === 0 ? '' : ' ' + i}${ext}`",
             "name": "Фильмы"
         },
         "tv": {
             "ext":  [ ".mov", ".avi", ".mkv", ".mp4" ],
             "name": "Сериалы",
+            "filenameProcessor": "return `${name}E${i < 10 ? '0' + i : i}`",
             "additional": {
                 "message": "Введите номер сезона от 0 до 99.",
-                "processor": "return \"Season \" + (input.length !== 2 ? input.padStart(2, \"0\") : input)",
+                "processor": "return `Season ${input.length !== 2 ? input.padStart(2, '0'}` : input) + ext",
                 "schema": {
                     "minLength": 1,
                     "maxLength": 2,
@@ -46,6 +48,7 @@
         "music": {
             "ext":  [ ".mp3", ".flac" ],
             "name": "Музыка",
+            "filenameProcessor": "return filename + ext",
             "additional": {
                 "message": "Введите наименование альбома.",
                 "processor": "return input",

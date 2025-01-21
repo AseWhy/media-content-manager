@@ -1,8 +1,18 @@
 import { readFileSync } from "fs";
 import { Schema } from "jsonschema";
+import { tmpdir } from "os";
 
-/** Папка для загрузки торрентов */
-export const MANAGED_DIR = process.env.MANAGED_DIR ?? "./downloads";
+/** Директория для размещения медиаконтента */
+export const MANAGED_DIR = process.env.MANAGED_DIR ?? "./media";
+
+/** Директория для загрузки торрентов */
+export const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR ?? "./downloads";
+
+/** Директория, в которую будет выполняться загрузка файлов полученных из пост обработчика */
+export const PROCESSOR_DIR = process.env.PROCESSOR_DIR ?? tmpdir();
+
+/** Интервал запроса данных с пост обработчиков */
+export const PULL_INTERVAL = process.env.PULL_INTERVAL ? parseInt(process.env.PULL_INTERVAL) : 15000;
 
 /** Токен бота */
 export const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
@@ -27,6 +37,8 @@ export type ConfigCategory = {
     ext:  string[];
     /** Наименование категории расширений */
     name: string;
+    /** Функция обработки наименования файла */
+    filenameProcessor: string;
     /** Тип дополнительно запрашиваемых данных */
     additional?: {
         /** Сообщение пользователю */
@@ -44,7 +56,7 @@ export type ConfigCategory = {
 export type ConfigPostprocessing = {
     /** Признак необходимости выполнять пост обработку */
     enabled: boolean;
-    /** Гейтвеи для подключения к постобработчикам */
+    /** Гейтвеи для подключения к пост обработчикам */
     gateways: string[];
     /** Категории постобработки */
     categories: Record<ConfigCategoryName, any>

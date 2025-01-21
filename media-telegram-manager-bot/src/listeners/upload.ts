@@ -174,18 +174,18 @@ STATE_MANAGER.on("state:upload_additional", async (msg: Message, { magnet, categ
 });
 
 // Действие при окончании загрузки
-TORRENT_SERVICE.on("done", (torrent: TorrentData, data: TorrentStoredData) => {
+TORRENT_SERVICE.on("done", (torrent: TorrentData) => {
     const panel = PANEL_MANAGER.getPanel(torrent.data.chatId);
-    for (const { name } of torrent.getFiles(CONFIG.categories[data.category])) {
+    for (const { name } of torrent.files) {
         panel.remove(torrent.id + name);
     }
     panel.remove(torrent.id);
 });
 
 // Действие при получении новых данных торрента
-TORRENT_SERVICE.on("download", (torrent: TorrentData, data: TorrentStoredData) => {
+TORRENT_SERVICE.on("download", (torrent: TorrentData) => {
     const panel = PANEL_MANAGER.getPanel(torrent.data.chatId);
-    const files = torrent.getFiles(CONFIG.categories[data.category]);
+    const files = torrent.files;
 
     panel.add(torrent.id, new PanelData(torrent.name, torrent.downloadSpeed, torrent.size, torrent.downloaded, torrent.progress, false));
 
