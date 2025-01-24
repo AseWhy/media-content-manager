@@ -146,7 +146,7 @@ STATE_MANAGER.on("state:upload_additional", async (msg: Message, { magnet, categ
 
     const categoryData = CONFIG.categories[category as ConfigCategoryName];
 
-    if (categoryData.additional && !validate(message, categoryData.additional.schema)) {
+    if (categoryData.additional && !validate(message, categoryData.additional.schema).valid) {
         await BOT.sendMessage(chatId, cancelable(categoryData.additional.message));
     } else {
         try {

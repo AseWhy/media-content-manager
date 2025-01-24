@@ -1,6 +1,7 @@
 import { FSDB } from "file-system-db";
-import { ProcessingType } from "../contants";
+import { ProcessingResolutions, ProcessingType, VideoCodecType } from "../contants";
 import { Service } from "typedi";
+import { Schema } from "jsonschema";
 
 /** База данных обработчика */
 const DATABASE = new FSDB("./data/customers.json", false);
@@ -37,5 +38,23 @@ export type Customer = {
     /** Реле для ответов */
     readonly relay: string;
     /** Конфигурация обработки для этого заказчика */
-    readonly config: Record<ProcessingType, any>;
+    readonly config: Record<ProcessingType, VideoCustomerConfig>;
 }
+
+/** Конфигурация заказчика */
+export type CustomerConfig = VideoCustomerConfig;
+
+/**
+ * Конфигурая для пост-обработки видео
+ */
+export type VideoCustomerConfig = {
+    /** Необходимые разрешения потока */
+    resolutions: ProcessingResolutions[],
+    /** Карта, где ключ это тип потока а значение это схема для фильтрации потоков этого типа */
+    stream: VideoCustomerStreamConfig;
+}
+
+/**
+ * Конфигурация видео потока заказчика
+ */
+export type VideoCustomerStreamConfig = Record<VideoCodecType, Schema>;

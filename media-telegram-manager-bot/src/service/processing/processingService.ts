@@ -2,14 +2,13 @@ import { CONFIG, ConfigCategoryName, PROCESSOR_DIR, PULL_INTERVAL } from "../../
 import { Service } from "typedi";
 import { FSDB } from "file-system-db";
 import { v7 } from "uuid";
-import { basename, join } from "path";
+import { join } from "path";
 import { createReadStream } from "fs";
 import { createWriteStream, existsSync } from "fs";
 import { mkdir, rm } from "fs/promises";
 import { json } from "stream/consumers";
 import { form, fetch } from "../http";
 import { getSystemErrorName } from "util";
-import { Writable } from "stream";
 import { IncomingMessage } from "http";
 
 import busboy from "busboy";
@@ -18,6 +17,12 @@ import FormData from "form-data";
 
 /** База данных обработчика */
 const DATABASE = new FSDB("./data/post-processing.json", false);
+
+/** Ключ обрабатываемых файлов */
+const PROCESSING_KEY = "processing";
+
+/** Ключ полученных файлов */
+const CONSUMED_KEY = "consumed";
 
 /**
  * Сервис постобработки
@@ -45,6 +50,7 @@ export class ProcessingService extends EventEmitter {
             return;
         }
         await this._registration();
+        await this._onConsume();
     }
 
     /**
@@ -55,7 +61,7 @@ export class ProcessingService extends EventEmitter {
      * @param name        имя файла, под которым он будет сохранен после обработки
      */
     async process(path: string, destination: string, name: string, type: ConfigCategoryName): Promise<void> {
-        console.log(`Отправка медиафайла "${path}"[${name}] на постобработку`);
+        console.log(`Отправка медиафайла "${path}" [${name}] на постобработку`);
 
         for (const gateway of CONFIG.postProcessing.gateways) {
             try {
@@ -79,7 +85,7 @@ export class ProcessingService extends EventEmitter {
                     continue
                 }
 
-                DATABASE.set(`processing.${id}`, { type, destination });
+                DATABASE.set(`${PROCESSING_KEY}.${id}`, { destination });
 
                 return;
             } catch(e) {
@@ -103,7 +109,7 @@ export class ProcessingService extends EventEmitter {
             try {
                 const response = await fetch(`${gateway}/register/${CONFIG.nodeId}`, {
                     method: "POST",
-                    body: { config: CONFIG.postProcessing.categories }
+                    body: { config: CONFIG.postProcessing.config }
                 });
                 if (response.statusCode !== 200) {
                     continue;
@@ -118,6 +124,25 @@ export class ProcessingService extends EventEmitter {
     }
 
     /**
+     * Действие при получении новго обработанного файла
+     */
+    private async _onConsume() {
+        const consumed: Record<string, PostProcessCompleteOrder> = DATABASE.get(CONSUMED_KEY);
+        // Обрабатываем полученные файлы
+        for (const key in consumed) {
+            const order = consumed[key];
+            try {
+                for (const listener of this.listeners("done")) {
+                    await listener(order);
+                }
+                DATABASE.delete(`${CONSUMED_KEY}.${key}`);
+            } catch(e) {
+                console.error(`Ошибка при обработке полученной записи ${key}`, e);
+            }
+        }
+    }
+
+    /**
      * Действие при получении результата постобработки
      * @param files список файлов результата постобработки
      * @param data  дополнительные данные
@@ -126,16 +151,16 @@ export class ProcessingService extends EventEmitter {
         if (id === null) {
             console.warn("Идентиификатор не передан");
         } else {
-            const order = DATABASE.get(`processing.${id}`);
-            const listenerData = { order, files };
+            const order: PostProcessOrder = DATABASE.get(`${PROCESSING_KEY}.${id}`);
 
-            console.log(`Получены обработанные медиафайлы для заказа ${id}`, files, order);
+            // Выводим сообщение в лог
+            console.log(`Получены обработанные медиафайлы для заказа ${id} типа ${order.destination}\n${files.map(filePath => `\t${filePath}`).join("\n")}`);
 
-            for (const listener of this.listeners("done")) {
-                await listener(listenerData);
-            }
+            DATABASE.set(`${CONSUMED_KEY}.${id}`, { order, files });
 
-            DATABASE.delete(`processing.${id}`);
+            DATABASE.delete(`${PROCESSING_KEY}.${id}`);
+
+            await this._onConsume();
         }
     }
 

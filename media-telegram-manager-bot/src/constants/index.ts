@@ -59,7 +59,7 @@ export type ConfigPostprocessing = {
     /** Гейтвеи для подключения к пост обработчикам */
     gateways: string[];
     /** Категории постобработки */
-    categories: Record<ConfigCategoryName, any>
+    config: Record<ConfigCategoryName, any>
 }
 
 /**

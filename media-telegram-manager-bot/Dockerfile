@@ -35,4 +35,4 @@ RUN npm install; \
     rm -r ./src
 
 # Запуск
-CMD [ "node", "--import=extensionless/register", "./dist" ]
+CMD [ "node", "--trace-warnings", "--import=extensionless/register", "./dist" ]

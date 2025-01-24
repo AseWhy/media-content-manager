@@ -1,4 +1,5 @@
 import { ProcessingType } from "../../../contants";
+import { CustomerConfig } from "../../customerRegistry";
 
 /**
  * Структура заказа постобработки
@@ -13,7 +14,7 @@ export type CustomerOrder = {
     /** Наименование медиа */
     name: string;
     /** Конфигурация постобработки */
-    config: any;
+    config: CustomerConfig;
 }
 
 /**

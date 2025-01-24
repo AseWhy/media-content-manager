@@ -3,23 +3,59 @@
     "postProcessing": {
         "enabled": true,
         "gateways": ["http://192.168.0.244:1949"],
-        "categories": {
+        "config": {
             "movies": {
                 "resolutions": [ "720p", "1080p", "2160p" ],
-                "allowedsubs": {
-                    "contains": [ "RU", "Rus", "ru", "rus", "Рус", "ру", "рус", "Россия", "россия" ]
-                },
-                "allowedaudio": {
-                    "contains": [ "RU", "Rus", "ru", "rus", "Рус", "ру", "рус", "Россия", "россия" ]
+                "stream": {
+                    "audio": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                            "tags": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "required": ["language"],
+                                "properties": {
+                                    "language": {
+                                        "type": "string",
+                                        "pattern": "^rus$"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "subtitle": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                            "tags": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "required": ["language"],
+                                "properties": {
+                                    "language": {
+                                        "type": "string",
+                                        "pattern": "^rus$"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             },
             "tv": {
                 "resolutions": [ "720p", "1080p" ],
-                "allowedsubs": {
-                    "contains": [ "RU", "Rus", "ru", "rus", "Рус", "ру", "рус", "Россия", "россия" ]
-                },
-                "allowedaudio": {
-                    "contains": [ "RU", "Rus", "ru", "rus", "Рус", "ру", "рус", "Россия", "россия" ]
+                "stream": {
+                    "audio": {
+                        "language": {
+                            "equals": "rus"
+                        }
+                    },
+                    "subtitle": {
+                        "language": {
+                            "equals": "rus"
+                        }
+                    }
                 }
             }
         }

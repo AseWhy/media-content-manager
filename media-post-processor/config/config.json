@@ -3,7 +3,20 @@
     "processing": {
         "movies": {
             "filenameFunction": "return filename + ' - ' + name + ext",
-            "additinalParams": ["-crf", 17],
+            "videoCodec": "hevc_vaapi",
+            "audioCodec": "eac3",
+            "additinalParams": {
+                "input": [
+                    "-hwaccel", "vaapi",
+                    "-hwaccel_output_format", "vaapi",
+                    "-vaapi_device", "/dev/dri/renderD128"
+                ],
+                "output": [
+                    "-q", "0",
+                    "-preset", "fast",
+                    "-vf", "scale_vaapi=w=${sampleWidth}:h=${sampleHeight}:format=nv12"
+                ]
+            },
             "outputs": [
                 {
                     "resolutions": [
@@ -22,8 +35,6 @@
                         [ 1280, 532 ],
                         [ 1280, 524 ]
                     ],
-                    "codec": "hevc_vaapi",
-                    "preset": "fast",
                     "name": "720p"
                 },
                 {
@@ -40,6 +51,7 @@
                         [ 1920,  810 ],
                         [ 1920,  802 ],
                         [ 1920,  800 ],
+                        [ 1920,  798 ],
                         [ 1920,  786 ],
                         [ 922,  1152 ],
                         [ 1440, 1152 ],
@@ -55,8 +67,6 @@
                         [ 2048,  852 ],
                         [ 2048,  838 ]
                     ],
-                    "codec": "hevc_vaapi",
-                    "preset": "fast",
                     "name": "1080p"
                 },
                 {
@@ -88,15 +98,26 @@
                         [ 4096, 1706 ],
                         [ 4096, 1678 ]
                     ],
-                    "codec": "hevc_vaapi",
-                    "preset": "fast",
                     "name": "2160p"
                 }
             ]
         },
         "tv": {
             "filenameFunction": "return filename + ' - ' + name + ext",
-            "additinalParams": ["-crf", 20],
+            "videoCodec": "hevc_vaapi",
+            "audioCodec": "eac3",
+            "additinalParams": {
+                "input": [
+                    "-hwaccel", "vaapi",
+                    "-hwaccel_output_format", "vaapi",
+                    "-vaapi_device", "/dev/dri/renderD128"
+                ],
+                "output": [
+                    "-q", "5",
+                    "-preset", "fast",
+                    "-vf", "scale_vaapi=w=${sampleWidth}:h=${sampleHeight}:format=nv12"
+                ]
+            },
             "outputs": [
                 {
                     "resolutions": [
@@ -114,8 +135,6 @@
                         [ 1280, 532 ],
                         [ 1280, 524 ]
                     ],
-                    "codec": "hevc_vaapi",
-                    "preset": "fast",
                     "name": "720p"
                 },
                 {
@@ -147,8 +166,6 @@
                         [ 2048,  852 ],
                         [ 2048,  838 ]
                     ],
-                    "codec": "hevc_vaapi",
-                    "preset": "fast",
                     "name": "1080p"
                 }
             ]

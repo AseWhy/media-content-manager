@@ -8,19 +8,10 @@ ENV LC_ALL ru_RU.UTF-8
 # Создаем рабочий каталог
 RUN mkdir -p /opt/common; \
     mkdir -p /opt/common/app; \
+    echo "deb http://deb.debian.org/debian bookworm main contrib non-free\ndeb-src http://deb.debian.org/debian bookworm main contrib non-free" >> /etc/apt/sources.list; \
     apt update; \
-    apt install -y software-properties-common; \
-    add-apt-repository 'deb http://archive.ubuntu.com/ubuntu natty main restricted universe multiverse non-free'; \
-    add-apt-repository 'deb http://ftp.uk.debian.org/debian bookworm-updates main contrib non-free'; \
-    add-apt-repository 'deb http://ftp.uk.debian.org/debian bookworm main contrib non-free'; \
-    add-apt-repository 'deb http://security.debian.org bookworm-security main contrib non-free'; \
-    apt update; \
-    apt install -y autoconf automake bison flex autopoint libtool \
-    libglib2.0-dev yasm nasm xutils-dev libpthread-stubs0-dev libpciaccess-dev libudev-dev \
-    libxrandr-dev libegl1-mesa-dev openssh-server git-core wget \
-    build-essential gettext libgles2-mesa-dev libshout3-dev libsoup2.4-dev \
-    nginx libssl-dev intel-gpu-tools libopencv-dev opencv-data software-properties-common software-properties-common \
-    intel-media-va-driver-non-free ffmpeg
+    apt install -y vainfo intel-media-va-driver-non-free libva-dev libva-drm2 libva-x11-2 libdrm-dev ffmpeg; \
+    rm -rf /var/lib/apt/lists/* 
 
 # Устанавливаем рабочий каталог
 WORKDIR /opt/common

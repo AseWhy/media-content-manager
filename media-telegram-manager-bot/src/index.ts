@@ -13,6 +13,7 @@ import { ProcessingService } from "./service/processing/processingService";
 import { ChatStateManager } from './service/telegram/chatStateManager';
 
 import TelegramBot from 'node-telegram-bot-api';
+import EventEmitter from 'events';
 
 // Выводим значения переменных
 console.log("MANAGED_DIR", "\t\t", MANAGED_DIR);
@@ -79,3 +80,6 @@ BOT.setMyCommands([
         description: "Отображает список файлов"
     }
 ], { language_code: "ru" });
+
+// Устанавливаем максимальное количество слушателей
+EventEmitter.setMaxListeners(100);

@@ -20,6 +20,9 @@ export type ProcessingResolutions = "720p" | "1080p" | "2160p";
 /** Тип обработки */
 export type ProcessingType = "movies" | "tv";
 
+/** Тип кодека видеофайла */
+export type VideoCodecType = "audio" | "subtitle";
+
 /**
  * Конфигурация приложения
  */
@@ -41,6 +44,18 @@ export type ProcessingConfig = {
 }
 
 /**
+ * Дополнительные параметры постобработки
+ */
+export type VideoProcessingConfigAdditionalParamsConfig = {
+    /** Общие параметры пост обработки */
+    common: string[];
+    /** Параметры пост обработки выходов */
+    output: string[];
+    /** Параметры пост обработки входов */
+    input: string[];
+};
+
+/**
  * Правило постобработки
  */
 export type VideoProcessingConfigRule<Name> = {
@@ -48,8 +63,12 @@ export type VideoProcessingConfigRule<Name> = {
     outputs: VideoProcessingOutputConfig<Name>[];
     /** Функция получения названия выходящего файла */
     filenameFunction: string;
+    /** Видео кодек */
+    videoCodec: string;
+    /** Аудио кодек */
+    audioCodec: string;
     /** Дополнительные параметры запуска постобработки */
-    additinalParams: string[];
+    additinalParams: VideoProcessingConfigAdditionalParamsConfig;
 }
 
 /**
@@ -60,8 +79,4 @@ export type VideoProcessingOutputConfig<Name> = {
     name: Name;
     /** Разрешения выхода */
     resolutions: [ number, number ][];
-    /** Кодек постобработки */
-    codec: string;
-    /** Пресет постобработки */
-    preset: string;
 }

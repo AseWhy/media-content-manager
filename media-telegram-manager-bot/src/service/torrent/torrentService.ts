@@ -87,6 +87,9 @@ export class TorrentService extends EventEmitter {
                     return res(torrentData);
                 }
             });
+            
+            // Действие при ошибке
+            torrentData.on("error", rej);
 
             // Действие при загрузке данных
             torrentData.on("download", () => {
