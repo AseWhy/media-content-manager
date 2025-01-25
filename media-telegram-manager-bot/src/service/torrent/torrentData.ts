@@ -5,9 +5,6 @@ import { ConfigCategory } from "../../constants";
 
 import _ from "lodash";
 
-/** Дополнительные данные торрента */
-export type TorrentAdditionalData = Record<string, string | number>;
-
 /**
  * Данные торрента
  */
@@ -33,9 +30,16 @@ export class TorrentData {
      * @param data      дополнительные данные
      */
     constructor(private readonly _torrent: Torrent, private readonly _category: ConfigCategory, public readonly id: string,
-        public readonly data: TorrentAdditionalData) {
+        public readonly data: Record<string, string>) {
         this.on("metadata", this._onMetadata.bind(this));
         this.on("download", this._onProgress.bind(this));
+    }
+
+    /**
+     * Возвращает путь до директории торрента
+     */
+    get path() {
+        return this._torrent.path;
     }
 
     /**

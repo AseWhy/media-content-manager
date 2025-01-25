@@ -1,5 +1,5 @@
 import { FSDB } from "file-system-db";
-import { ProcessingResolutions, ProcessingType, VideoCodecType } from "../contants";
+import { ProcessingType, VideoCodecType } from "../contants";
 import { Service } from "typedi";
 import { Schema } from "jsonschema";
 
@@ -45,11 +45,21 @@ export type Customer = {
 export type CustomerConfig = VideoCustomerConfig;
 
 /**
+ * Конфигурая разрешений для пост-обработки видео
+ */
+export type VideoOutputConfig = {
+    /** Условие создания выхода */
+    mode: "always" | "first";
+    /** Доступные имена выходов */
+    names: string[];
+}
+
+/**
  * Конфигурая для пост-обработки видео
  */
 export type VideoCustomerConfig = {
-    /** Необходимые разрешения потока */
-    resolutions: ProcessingResolutions[],
+    /** Конфигурация выходов */
+    outputs: VideoOutputConfig,
     /** Карта, где ключ это тип потока а значение это схема для фильтрации потоков этого типа */
     stream: VideoCustomerStreamConfig;
 }

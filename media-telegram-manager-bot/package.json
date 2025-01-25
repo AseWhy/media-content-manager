@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "busboy": "^1.6.0",
+    "format-duration": "^3.0.2",
     "human-format": "^1.2.1",
     "node-telegram-bot-api": "0.63.0",
     "parse-torrent": "^11.0.18",

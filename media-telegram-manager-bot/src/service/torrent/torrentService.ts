@@ -1,11 +1,12 @@
 import { EventEmitter } from "events";
 import { FSDB } from "file-system-db";
-import { TorrentAdditionalData, TorrentData, TorrentFileData } from "./torrentData";
-import { extname, join, parse } from "path";
+import { TorrentData } from "./torrentData";
+import { join, parse } from "path";
 import { hash } from "crypto";
 import { CONFIG, ConfigCategoryName, DOWNLOAD_DIR, DOWNLOAD_LIMIT } from "../../constants";
 import { saveFile } from "./torrentFileSaver";
 import { Service } from "typedi";
+import { rm } from "fs/promises";
 
 import WebTorrent from "webtorrent";
 import _ from "lodash";
@@ -14,7 +15,7 @@ import _ from "lodash";
 const TORRENT_CLIENT = new WebTorrent({ downloadLimit: DOWNLOAD_LIMIT });
 
 /** Хранилище в файловой системе */
-const FILE_SYSTEM_DB = new FSDB("./data/torrent.json", false);
+const DATABASE = new FSDB("./data/torrent.json", false);
 
 /** Ключ загружаемых торрент файлов */
 const DOWNLOADS_KEY = "downloads";
@@ -32,7 +33,7 @@ export class TorrentService extends EventEmitter {
      * Восстанавливает утраченные загрузки
      */
     public async restoreDownloading() {
-        const data: Record<string, TorrentStoredData> = FILE_SYSTEM_DB.get(DOWNLOADS_KEY) ?? {};
+        const data: Record<string, TorrentStoredData> = DATABASE.get(DOWNLOADS_KEY) ?? {};
         for (const [ hash, storedData ] of Object.entries(data)) {
             if (this.processed[hash]) {
                 continue;
@@ -68,9 +69,10 @@ export class TorrentService extends EventEmitter {
      * @returns данные загружаемого торрента
      */
     private _addToDownload(hash: string, data: TorrentStoredData): Promise<TorrentData> {
-        return new Promise((res, rej) => {
+        return new Promise(async (res, rej) => {
             const category = CONFIG.categories[data.category];
-            const torrentData = new TorrentData(TORRENT_CLIENT.add(data.magnet, { path: DOWNLOAD_DIR }), category, hash, data.data);
+            const torrentData = new TorrentData(TORRENT_CLIENT.add(data.magnet, { path: join(DOWNLOAD_DIR, hash) }), category, hash, data.data);
+            const pathFunction = new Function(..._.keys(data.additionalData), "filename", "name", 'i', "ext", category.pathFunction);
 
             // Пиры не найдены
             torrentData.on("noPeers", () => {
@@ -82,9 +84,10 @@ export class TorrentService extends EventEmitter {
             torrentData.on("metadata", () => {
                 if (torrentData.files.length === 0) {
                     torrentData.destroy();
-                    return rej(new TorrentError("Не найдено подходящих для загрузки файлов. "));
+                    rej(new TorrentError("Не найдено подходящих для загрузки файлов. "));
                 } else {
-                    return res(torrentData);
+                    this._markTorrentAsDownloading(hash, data);
+                    res(torrentData);
                 }
             });
             
@@ -100,27 +103,28 @@ export class TorrentService extends EventEmitter {
 
             // Действие при завершении загрузки
             torrentData.on("done", async () => {
-                const { filenameProcessor: filenameProcessorStr } = category;
-                const filenameProcessor = new Function("filename", "name", "i", "ext", filenameProcessorStr);
-
-                await Promise.all(torrentData.files.map(({ path }, i) => {
-                    let destinationDir = join(data.category, data.name);
-                    if (data.dir) {
-                        destinationDir = join(destinationDir, data.dir);
-                    }
-                    const { name, ext } = parse(path);
-                    return saveFile(data.category, path, destinationDir, filenameProcessor(name, data.name, i, ext));  
-                }));
+                await Promise.all(
+                    _
+                        .chain(torrentData.files)
+                        .sortBy("path")
+                        .map(({ path }, i) => {
+                            const { name, ext } = parse(path);
+                            return saveFile(data.category, path,
+                                join(data.category, pathFunction(..._.values(data.additionalData), name, data.name, i, ext)),
+                                    data.data);
+                        })
+                    .value()
+                );
 
                 this.emit("done", torrentData, data);
                 this._markTorrentAsDownloaded(hash);
+
+                await rm(torrentData.path, { recursive: true });
     
                 torrentData.destroy();
             });
 
             console.log(`Добавлена загрузка ${hash}, ${data.category}, ${data.name}`, data.data);
-
-            this._markTorrentAsDownloading(hash, data);
         });
     }
 
@@ -130,9 +134,7 @@ export class TorrentService extends EventEmitter {
      */
     private _markTorrentAsDownloaded(hash: string): void {
         if (this._isDownloading(hash)) {
-            const data: Record<string, TorrentStoredData> = FILE_SYSTEM_DB.get(DOWNLOADS_KEY) ?? {};
-            delete data[hash];
-            FILE_SYSTEM_DB.set(DOWNLOADS_KEY, data);
+            DATABASE.delete(`${DOWNLOADS_KEY}.${hash}`);
         }
     }
 
@@ -146,9 +148,7 @@ export class TorrentService extends EventEmitter {
         if (this._isDownloading(hash)) {
             return;
         }
-        const data: Record<string, TorrentStoredData> = FILE_SYSTEM_DB.get(DOWNLOADS_KEY) ?? {};
-        data[hash] = torrentData;
-        FILE_SYSTEM_DB.set(DOWNLOADS_KEY, data);
+        DATABASE.set(`${DOWNLOADS_KEY}.${hash}`, torrentData);
     }
 
     /**
@@ -157,7 +157,7 @@ export class TorrentService extends EventEmitter {
      * @returns 
      */
     private _isDownloading(hash: string): boolean {
-        const data: Record<string, TorrentStoredData> = FILE_SYSTEM_DB.get(DOWNLOADS_KEY) ?? {};
+        const data: Record<string, TorrentStoredData> = DATABASE.get(DOWNLOADS_KEY) ?? {};
         return data[hash] != null;
     }
 }
@@ -183,10 +183,10 @@ export type TorrentStoredData = {
     name: string;
     /** Категория загрузки */
     category: ConfigCategoryName;
-    /** Поддиректория, в которую необхоидмо переместить файлы */
-    dir: string | null;
+    /** Дополнительные данные */
+    additionalData: Record<string, string>;
     /** Магнитная ссылка */
     magnet: string;
     /** Дополнительные данные */
-    data: TorrentAdditionalData;
+    data: Record<string, string>;
 };

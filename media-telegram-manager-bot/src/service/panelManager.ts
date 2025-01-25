@@ -4,8 +4,9 @@ import { ChatId } from "node-telegram-bot-api";
 import { Service } from "typedi";
 import { toLength } from ".";
 
-import _, { DebouncedFunc, DebouncedFuncLeading } from "lodash";
+import _, { type DebouncedFunc, type DebouncedFuncLeading } from "lodash";
 import humanFormat from "human-format";
+import formatDuration from "format-duration";
 
 /** Интервал обновления панели */
 const PANEL_UPDATE_INTERVAL = 5000;
@@ -40,7 +41,7 @@ export class PanelManager {
 export class Panel {
 
     /** Данные панели */
-    private _data: { [key: string]: PanelData } = {};
+    private _data: { [key: string]: PanelDownloadData | PanelPostProcessingData } = {};
 
     /** Индикатор прогресса загрузки */
     private _bars: { [key: string]: ProgressBar } = {};
@@ -64,13 +65,14 @@ export class Panel {
      * Добавляет данные загрузки
      * @param downloadingId идентификатор загрузки
      */
-    public add(downloadingId: string, data: PanelData) {
+    public add(downloadingId: string, data: PanelDownloadData | PanelPostProcessingData) {
         const prevData = this._data[downloadingId];
 
         this._data[downloadingId] = data;
         this._bars[downloadingId] = this._bars[downloadingId] ?? new ProgressBar(100);
 
-        if (prevData == null || prevData.name != data.name || prevData.percent != data.percent || prevData.speed != data.speed) {
+        if (prevData == null || prevData.name != data.name || prevData.progress != data.progress ||
+            prevData instanceof PanelDownloadData && data instanceof PanelDownloadData && prevData.speed != data.speed) {
             this.__update();
         }
     }
@@ -88,6 +90,13 @@ export class Panel {
             this.__update();
         }
     }
+
+    /**
+     * Пересоздает панель
+     */
+    public recreate(): void {
+        this._worker.forgetLastMessage();
+    } 
 
     /**
      * Обновляет сообщение с панелью
@@ -131,48 +140,62 @@ export class Panel {
      * @param entries элементы панели
      * @returns сообщение с панелью
      */
-    private _message(entries: [string, PanelData][]) {
+    private _message(entries: [string, PanelDownloadData | PanelPostProcessingData][]) {
         if (entries.length === 0) {
             return "Все данные успешно загружены\\!";
         }
 
         let computedSpeed = 0;
+        let computedRest = 0;
         let computedDownloaded = 0;
         let computedSize = 0;
-        let computedPercent = 0;
-        let sections = 0;
 
-        const lines: string[] = [];
+        const downloading: string[] = [];
+        const processing: string[] = [];
 
-        for (const [ downloadingId, { name, percent, speed, downloaded, size, isSubsection } ] of entries) {
+        for (const [ downloadingId, data ] of _.sortBy(entries, "name")) {
             const progressBar = this._bars[downloadingId];
-            const computedName = toLength(name, 64);
+            const computedName = toLength(data.name, 64);
 
-            progressBar.set(percent);
-            
-            if (isSubsection) {
-                lines.push(`${computedName}: ${progressBar.render()} [${humanFormat(downloaded)} из ${humanFormat(size)}] (${percent.toFixed(2)}%)`);
+            progressBar.set(data.progress);
+
+            if (data instanceof PanelDownloadData) {
+                if (data.isSubsection) {
+                    downloading.push(`${computedName}: ${progressBar.render()} [${humanFormat(data.downloaded)} из ${humanFormat(data.size)}] (${
+                        data.progress.toFixed(2)}%)`);
+                } else {
+                    downloading.push(`${computedName}: ${progressBar.render()} [${humanFormat(data.downloaded)} из ${humanFormat(data.size)}] ${
+                        humanFormat(data.speed)}/S (${data.progress.toFixed(2)}%)`);
+
+                    computedSpeed += data.speed;
+                    computedDownloaded += data.downloaded;
+                    computedSize += data.size;
+                    computedRest += (data.size - data.downloaded) / data.speed * 1000;
+                }
             } else {
-                lines.push(`${computedName}: ${progressBar.render()} [${humanFormat(downloaded)} из ${humanFormat(size)}] ${humanFormat(speed)}/S (${percent.toFixed(2)}%)`);
-            
-                computedSpeed += speed;
-                computedPercent += percent;
-                computedDownloaded += downloaded;
-                computedSize += size;
-                sections++;
+                processing.push(`${computedName}: ${progressBar.render()} +${data.speed.toFixed(4)}%/S (${
+                    data.progress.toFixed(2)}%) до завершения ${formatDuration((100 - data.progress) / data.speed * 1000)}`);
             }
         }
 
-        lines.unshift(`Выполняется загрузка... [${humanFormat(computedDownloaded)} из ${humanFormat(computedSize)}] ${humanFormat(computedSpeed)}/S (${(computedPercent / sections).toFixed(2)}%)\n`);
+        if (downloading.length !== 0) {
+            downloading.unshift(`Выполняется загрузка... [${humanFormat(computedDownloaded)} из ${humanFormat(computedSize)}] ${
+                humanFormat(computedSpeed)}/S (${(computedDownloaded / computedSize * 100).toFixed(2)}%) до завершения загрузки ${
+                    formatDuration(computedRest)}\n`);
+        }
 
-        return '```\n' + lines.join("\n") + '```';
+        if (processing.length !== 0) {
+            processing.unshift(`Выполняется пост обработка...\n`);
+        }
+
+        return [downloading, processing].map(e => `\`\`\`\n${e.join("\n")}\`\`\``).join("\n");
     }
 }
 
 /**
- * Данные отображения панели
+ * Данные отображения панели загрузки
  */
-export class PanelData {
+export class PanelDownloadData {
 
     /**
      * Конструктор
@@ -180,11 +203,27 @@ export class PanelData {
      * @param speed        скорость загрузки
      * @param size         размер файла
      * @param downloaded   размер загруженных файлов
-     * @param percent      процент загруженных данных
+     * @param progress     прогресс загрузки
      * @param isSubsection признак подраздела
      */
     constructor(public readonly name: string, public readonly speed: number, public readonly size: number,
-        public readonly downloaded: number, public readonly percent: number, public readonly isSubsection: boolean) {
+        public readonly downloaded: number, public readonly progress: number, public readonly isSubsection: boolean) {
+
+    }
+}
+
+/**
+ * Данные отображения панели пост обработки
+ */
+export class PanelPostProcessingData {
+
+    /**
+     * Конструктор
+     * @param name     наименование обработки
+     * @param progress прогресс конвертации
+     * @param speed    скорость обработки (% в секунду)
+     */
+    constructor(public readonly name: string, public readonly progress: number, public readonly speed: number) {
 
     }
 }

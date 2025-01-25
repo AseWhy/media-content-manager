@@ -62,13 +62,6 @@
   resolved "https://registry.npmjs.org/@types/caseless/-/caseless-0.12.5.tgz"
   integrity sha512-hWtVTC2q7hc7xZ/RLbxapMvDMgUnDvKvMOpKal4DrMyfGBUfB1oKaZlIRr6mJL+If3bAP6sV/QneGzF6tJjZDg==
 
-"@types/jsonschema@^1.1.1":
-  version "1.1.1"
-  resolved "https://registry.npmjs.org/@types/jsonschema/-/jsonschema-1.1.1.tgz"
-  integrity sha512-JPP6H7/h/uXzAow+NbD/jqA3tA1Fj3u2C0KiFAlQ+rtl2QhozxMEz0aPjKnr4YyAB8/6s0Xm9UPa0fFUB0y1OA==
-  dependencies:
-    jsonschema "*"
-
 "@types/lodash@^4.17.14":
   version "4.17.14"
   resolved "https://registry.npmjs.org/@types/lodash/-/lodash-4.17.14.tgz"
@@ -516,7 +509,7 @@ chunk-store-iterator@^1.0.3:
   dependencies:
     block-iterator "^1.1.1"
 
-combined-stream@^1.0.6, combined-stream@^1.0.8, combined-stream@~1.0.6:
+combined-stream@^1.0.6, combined-stream@~1.0.6:
   version "1.0.8"
   resolved "https://registry.npmjs.org/combined-stream/-/combined-stream-1.0.8.tgz"
   integrity sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==
@@ -919,15 +912,6 @@ form-data@^2.5.0:
     mime-types "^2.1.12"
     safe-buffer "^5.2.1"
 
-form-data@^4.0.1:
-  version "4.0.1"
-  resolved "https://registry.yarnpkg.com/form-data/-/form-data-4.0.1.tgz#ba1076daaaa5bfd7e99c1a6cb02aa0a5cff90d48"
-  integrity sha512-tzN8e4TX8+kkxGPK8D5u0FNmjPUjw3lwC9lSLxxoB/+GtsJG91CO8bSWy73APlgAZzZbXEYZJuxjkHH2w+Ezhw==
-  dependencies:
-    asynckit "^0.4.0"
-    combined-stream "^1.0.8"
-    mime-types "^2.1.12"
-
 form-data@~2.3.2:
   version "2.3.3"
   resolved "https://registry.npmjs.org/form-data/-/form-data-2.3.3.tgz"
@@ -936,6 +920,11 @@ form-data@~2.3.2:
     asynckit "^0.4.0"
     combined-stream "^1.0.6"
     mime-types "^2.1.12"
+
+format-duration@^3.0.2:
+  version "3.0.2"
+  resolved "https://registry.yarnpkg.com/format-duration/-/format-duration-3.0.2.tgz#cc90d76dcbf2b3a09978ae4c0f27619d4249cd1d"
+  integrity sha512-pKzJDSRgK2lqAiPW3uizDaIJaJnataZclsahz25UMwfdryBGDa+1HlbXGjzpMvX/2kMh4O0sNevFXKaEfCjHsA==
 
 formdata-polyfill@^4.0.10:
   version "4.0.10"
@@ -1418,11 +1407,6 @@ json-stringify-safe@~5.0.1:
   version "5.0.1"
   resolved "https://registry.npmjs.org/json-stringify-safe/-/json-stringify-safe-5.0.1.tgz"
   integrity sha512-ZClg6AaYvamvYEE82d3Iyd3vSSIjQ+odgjaTzRuO3s7toCdFKczob2i0zCh7JE8kWn17yvAWhUVxvqGwUalsRA==
-
-jsonschema@*, jsonschema@^1.5.0:
-  version "1.5.0"
-  resolved "https://registry.npmjs.org/jsonschema/-/jsonschema-1.5.0.tgz"
-  integrity sha512-K+A9hhqbn0f3pJX17Q/7H6yQfD/5OXgdrR5UE12gMXCiN9D5Xq2o5mddV2QEcX/bjla99ASsAAQUyMCCRWAEhw==
 
 jsprim@^1.2.2:
   version "1.4.2"
@@ -2423,11 +2407,6 @@ undici-types@~6.20.0:
   version "6.20.0"
   resolved "https://registry.npmjs.org/undici-types/-/undici-types-6.20.0.tgz"
   integrity sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg==
-
-undici@^7.2.3:
-  version "7.2.3"
-  resolved "https://registry.yarnpkg.com/undici/-/undici-7.2.3.tgz#e3e8ff2ddee1c3ab624b3a4f275093cff4b2fc77"
-  integrity sha512-2oSLHaDalSt2/O/wHA9M+/ZPAOcU2yrSP/cdBYJ+YxZskiPYDSqHbysLSlD7gq3JMqOoJI5O31RVU3BxX/MnAA==
 
 unordered-array-remove@^1.0.2:
   version "1.0.2"

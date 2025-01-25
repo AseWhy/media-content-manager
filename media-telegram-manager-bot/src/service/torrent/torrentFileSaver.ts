@@ -1,5 +1,5 @@
-import { basename, join } from "path";
-import { copyFile, mkdir, rm } from "fs/promises";
+import { basename, dirname, join } from "path";
+import { copyFile, mkdir } from "fs/promises";
 import { CONFIG, ConfigCategoryName, MANAGED_DIR } from "../../constants";
 import { existsSync } from "fs";
 import { Container } from "typedi";
@@ -10,41 +10,40 @@ const PROCESSING_SERVICE = Container.get(ProcessingService);
 
 /**
  * Сохраняет файл
- * @param category       категория данных
- * @param path           путь до исходного файла
- * @param destinationDir путь до директории сохранения
- * @param name           имя файла, под которым он должен быть сохранен
+ * @param category категория данных
+ * @param src      путь до исходного файла
+ * @param dest     путь до файла созранения
+ * @param name     имя файла, под которым он должен быть сохранен
+ * @param data     дополнительные данные
  */
-export async function saveFile(category: ConfigCategoryName, path: string, destinationDir: string, name: string): Promise<void> {
+export async function saveFile(category: ConfigCategoryName, src: string, dest: string, data: Record<string, string>): Promise<void> {
     if (CONFIG.postProcessing.enabled) {
         try {
-            await PROCESSING_SERVICE.process(path, destinationDir, name, category);
+            return await PROCESSING_SERVICE.process(src, dest, category, data);
         } catch(e) {
             // Исключение
             console.error("Ошибка при добавлении файла на постобработку", e);
-            // Сохраняем файл, чтобы зря не пропадал
-            await _moveFile(path, destinationDir, name);
         }
-    } else {
-        await _moveFile(path, destinationDir, name);
     }
-    await rm(path);
+    // Просто перемещаем файл
+    await _moveFile(src, dest);
 }
 
 /**
  * Сохраняет файл
- * @param path           путь до исходного файла
- * @param destinationDir путь до директории сохранения
- * @param name           имя файла, под которым он должен быть сохранен
+ * @param path путь до исходного файла
+ * @param dest путь до файла созранения
+ * @param name имя файла, под которым он должен быть сохранен
  */
-async function _moveFile(path: string, destinationDir: string, name: string): Promise<void> {
-    const managedDir = join(MANAGED_DIR, destinationDir);
+async function _moveFile(src: string, dest: string): Promise<void> {
+    const managedDirFilePath = join(MANAGED_DIR, dest);
+    const managedDir = dirname(managedDirFilePath);
     if (!existsSync(managedDir)) {
         await mkdir(managedDir, { recursive: true });
     }
-    await copyFile(path, join(managedDir, name));
+    await copyFile(src, managedDirFilePath);
 }
 
 // Обрабатываем завершение постобработки
-PROCESSING_SERVICE.on("done", async (order: PostProcessCompleteOrder) =>
-    await Promise.all(order.files.map(file => _moveFile(file, order.order.destination, basename(file)))))
+PROCESSING_SERVICE.on("done", async (id: string, order: PostProcessCompleteOrder) =>
+    await Promise.all(order.files.map(file => _moveFile(file, join(order.order.dest, basename(file))))))

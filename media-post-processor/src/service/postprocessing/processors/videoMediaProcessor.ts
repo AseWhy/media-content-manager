@@ -1,9 +1,9 @@
 import { join, parse } from "path";
-import { CONFIG, PROCESSING_DIR, ProcessingResolutions, VideoProcessingConfigRule, VideoProcessingOutputConfig } from "../../../contants";
+import { CONFIG, PROCESSING_DIR, VideoProcessingConfigRule, VideoProcessingOutputConfig } from "../../../contants";
 import { CustomerOrder, CustomerOrderProcessing, MediaProcessor } from "./mediaProcessor";
 import { existsSync } from "fs";
 import { mkdir, rm } from "fs/promises";
-import { VideoCustomerStreamConfig } from "../../customerRegistry";
+import { VideoCustomerStreamConfig, VideoOutputConfig } from "../../customerRegistry";
 import { validate } from "jsonschema";
 import { ffprobe } from "../../ffmpeg";
 import { VaInfo } from "../../vaInfo";
@@ -20,13 +20,12 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
     /** @inheritDoc */
     async process(id: string, order: CustomerOrder): Promise<void> {
         const { name } = parse(order.name);
-        const { resolutions, stream } = order.config;
+        const { outputs: outputConfig, stream } = order.config;
 
         // Конфигурация постобработки
         const processingConfig = CONFIG.processing[order.type];
         // Функция прогресса
-        const onProgress = _.throttle(args => console.log(`Прогресс конвертации ${id}: ${args.percent.toFixed(2)}%, ${
-            args.timemark}, обработано ${args.frames} кадров`), 5000);
+        const onProgress = _.throttle(this._onProgress.bind(this, id, order), 5000, { trailing: false });
 
         // Данные медиафайла
         const { streams }: FfprobeData = await ffprobe(order.pathToMedia);
@@ -35,7 +34,7 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
 
         // Исключенные потоки
         const filenameFunction = new Function("filename", "name", "ext", processingConfig.filenameFunction);
-        const outputs = this._extractRequirementOutputConfiguration(resolutions, width, height, processingConfig.outputs);
+        const outputs = this._extractRequirementOutputConfiguration(outputConfig, width, height, processingConfig.outputs);
         const excludedStreams = await this._filterExcludedStreams(streams, processingConfig, stream);
         const directory = join(PROCESSING_DIR, id);
         const result: string[] = [];
@@ -77,44 +76,50 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
         const orderProcessing = { ...order, directory, result, id };
 
         // Выводим команду запуска
-        console.log("Добавлена постобработка", _.chain(ffmpegBuilder._getArguments())
+        console.log("Добавлена постобработка", `${width}:${height}`, _.chain(ffmpegBuilder._getArguments())
             .map(e => _.toString(e))
             .map(e => e.includes(" ") ? `'${e.replace(/'/g, "\\'")}'` : e).join(" ")
             .value());
 
-        return new Promise((res, rej) => {
-            try {
-                // Вешаем слушатели на процесс ffmpeg
-                ffmpegBuilder.once("error", rej);
-                ffmpegBuilder.once("end", this._onDone.bind(this, orderProcessing));
-                ffmpegBuilder.once("end", res);
-                ffmpegBuilder.once('exit', () => console.log('Video recorder exited'));
-                
-                // При выводе ошибок
-                ffmpegBuilder.on("stderr", this._onStdOut.bind(this));
+        try {
+            await new Promise<void>((res, rej) => {
+                try {
+                    // Вешаем слушатели на процесс ffmpeg
+                    ffmpegBuilder.once("error", this.emit.bind(this, "error", orderProcessing));
+                    ffmpegBuilder.once('exit', () => console.log('Выход из обработчика видео'));
+                    ffmpegBuilder.once("end", async () => {
+                        await this._onDone(orderProcessing);
+                        res();
+                    });
+                    
+                    // При выводе ошибок
+                    ffmpegBuilder.on("stderr", this._onStdOut.bind(this,));
 
-                // Действие при прогрессе загрузки
-                ffmpegBuilder.on("progress", onProgress);
-                
-                // При выходе из программы убиваем процесс ffmpeg
-                const kill = () => ffmpegBuilder.kill("SIGKILL");
+                    // Действие при прогрессе загрузки
+                    ffmpegBuilder.on("progress", onProgress);
+                    
+                    // При выходе из программы убиваем процесс ffmpeg
+                    const kill = () => ffmpegBuilder.kill("SIGKILL");
 
-                process.once("exit",                kill);
-                process.once("SIGINT",              kill);
-                process.once("SIGUSR1",             kill);
-                process.once("SIGUSR2",             kill);
-                process.once("uncaughtException",   kill);
-                
-                if (result.length > 0) {
-                    // Запускаем обработку
-                    ffmpegBuilder.run();
-                } else {
-                    return rej(new Error("Не найдены подходящие разрешения для конвертации"));
+                    process.once("exit",                kill);
+                    process.once("SIGINT",              kill);
+                    process.once("SIGUSR1",             kill);
+                    process.once("SIGUSR2",             kill);
+                    process.once("uncaughtException",   kill);
+                    
+                    if (result.length > 0) {
+                        // Запускаем обработку
+                        ffmpegBuilder.run();
+                    } else {
+                        rej(new Error("Не найдены подходящие разрешения для конвертации"));
+                    }
+                } catch(e) {
+                    rej(e);
                 }
-            } catch(e) {
-                return rej(e);
-            }
-        });
+            });
+        } catch (e) {
+            this.emit("error", orderProcessing, e.message);
+        }
     }
 
     /**
@@ -122,7 +127,7 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
      * @param ffmpegBuilder    билдер задачи ffmpeg
      * @param processingConfig конфигурация постобработки
      */
-    private _addInputOptions(ffmpegBuilder: FfmpegCommand, { additinalParams: { input } }: VideoProcessingConfigRule<ProcessingResolutions>) {
+    private _addInputOptions(ffmpegBuilder: FfmpegCommand, { additinalParams: { input } }: VideoProcessingConfigRule) {
         if (input) {
             ffmpegBuilder.addInputOptions(input);
         }
@@ -135,12 +140,29 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
      * @param sampleWidth      требуемая ширина видеопотока
      * @param sampleHeight     требуемая высота видеопотока
      */
-    private _addOutputOptions(ffmpegBuilder: FfmpegCommand, { additinalParams: { output } }: VideoProcessingConfigRule<ProcessingResolutions>,
+    private _addOutputOptions(ffmpegBuilder: FfmpegCommand, { additinalParams: { output } }: VideoProcessingConfigRule,
         sampleWidth: number, sampleHeight: number) {
         if (output) {
             ffmpegBuilder.addOutputOptions(output.map(option => option.replace("${sampleWidth}", _.toString(sampleWidth))
                 .replace("${sampleHeight}", _.toString(sampleHeight))));
         }
+    }
+
+    /**
+     * Действие при прогрессе обработки
+     * @param id       идентификатор медиафайла
+     * @param order    заказ на обработку
+     * @param progress данные прогресса обработки
+     */
+    private _onProgress(id: string, order: CustomerOrder, progress: ProgressData) {
+        if (progress.percent) {
+            console.log(`Прогресс конвертации ${id}: ${progress.percent.toFixed(2)}%, ${
+                progress.timemark}, обработано ${progress.frames} кадров`);
+        } else {
+            console.log(`Прогресс конвертации ${id}: ${progress.timemark}, обработано ${progress.frames} кадров`);
+        }
+        // Публикуем событие
+        this.emit("progress", id, order, progress);
     }
 
     /**
@@ -186,7 +208,7 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
      * @param config           конфигурация
      * @returns исключенные из медиафайла потоки
      */
-    private async _filterExcludedStreams(streams: FfprobeStream[], processingConfig: VideoProcessingConfigRule<ProcessingResolutions>,
+    private async _filterExcludedStreams(streams: FfprobeStream[], processingConfig: VideoProcessingConfigRule,
         config: VideoCustomerStreamConfig) {
 
         const groups = _.groupBy(streams, e => e.codec_type);
@@ -238,18 +260,18 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
      * @param outputs     конфигурация выходов
      * @returns требуемую конфигурацию видеовыходов
      */
-    private _extractRequirementOutputConfiguration(resolutions: ProcessingResolutions[], width: number, height: number,
-        outputs: VideoProcessingOutputConfig<ProcessingResolutions>[]): RequirementResolutionConfig[] {
+    private _extractRequirementOutputConfiguration(outputConfig: VideoOutputConfig, width: number, height: number,
+        outputs: VideoProcessingOutputConfig[]): RequirementResolutionConfig[] {
 
         const result: RequirementResolutionConfig[] = [];
         const ratio = (width / height).toFixed(2);
 
-        for (const output of outputs) {
-            // Если конфигурация не используется
-            if (!resolutions.includes(output.name)) {
+        for (const output of _.reverse(outputs)) {
+            // Исключаем ненужные выходы
+            if (!outputConfig.names.includes(output.name)) {
                 continue;
             }
-    
+
             // Ищем конфигурацию с таким же разрешением экрана
             const sampleResolution = output.resolutions.find(
                 ([ width, height ]) => (width / height).toFixed(2) === ratio);
@@ -260,6 +282,11 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
             }
     
             result.push({ ...output, sampleWidth: sampleResolution[0], sampleHeight: sampleResolution[1] });
+            
+            // Если конфигурация выхода - это первый совпавший выход, то прерываем цикл
+            if (outputConfig.mode === "first" && outputConfig.names.includes(output.name)) {
+                break;
+            }
         }
 
         return result;
@@ -267,9 +294,27 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
 }
 
 /**
+ * Данные прогресс обаботки
+ */
+export type ProgressData = {
+    /** Количество обработанных кадров */
+    frames: number;
+    /** Текущее количество обрабатываемых кадров в секунду */
+    currentFps: number;
+    /** Текущий битрейт */
+    currentKbps: number;
+    /** Целевой размер */
+    targetSize: number;
+    /** Текущая метка времени обработанного медиафайла */
+    timemark: string;
+    /** Процент обработки */
+    percent?: number;
+};
+
+/**
  * Требуемая конфигурация видео выхода
  */
-type RequirementResolutionConfig = VideoProcessingOutputConfig<ProcessingResolutions> & {
+type RequirementResolutionConfig = VideoProcessingOutputConfig & {
     /** Требуемая ширина потока */
     sampleWidth: number;
     /** Требуемая высота потока */

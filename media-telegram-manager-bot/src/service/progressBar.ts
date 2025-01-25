@@ -1,13 +1,10 @@
 /** Символы прогресса загрузки */
 const SYMBOLS = [ "█", "▇", "▆", "▅", "▄", "▃", "▂" ];
 
-/** Событие прогресса */
-const PROGRESS = new Event("progress");
-
 /**
  * Класс индикатора прогресса
  */
-export class ProgressBar extends EventTarget {
+export class ProgressBar {
 
     /** Текущее значение прогресса */
     private _current: number;
@@ -18,7 +15,6 @@ export class ProgressBar extends EventTarget {
      * @param _length длинна прогресс бара в символах
      */
     constructor(private _total: number, private _length: number = 17) {
-        super();
         this._current = 0;
     }
 
@@ -43,11 +39,7 @@ export class ProgressBar extends EventTarget {
      * @param value текущее значение прогресса
      */
     public set(value: number): void {
-        const prev = this._current;
         this._current = Math.max(Math.min(value, this._total), 0);
-        if (this.current != prev) {
-            this.dispatchEvent(PROGRESS);
-        }
     }
 
     /**

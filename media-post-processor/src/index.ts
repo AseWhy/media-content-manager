@@ -20,30 +20,50 @@ const APP = express();
 /** Директория загрузки */
 const UPLOAD = multer({ dest: PENDING_DIR });
 
-// Получение следующего элемента
-APP.get("/pull/:customer", async (req, response) => {
-    Container.get(MediaPostProcessor).pullCompleted(req.params.customer, completed => {
-        return new Promise((res, rej) => {
-            const form = new FormData();
+/** Пост обработчик медиафайлов */
+const MEDIA_POST_PROCESSOR = Container.get(MediaPostProcessor);
 
-            form.append("_id", completed.id);
+// Получение прогресса обработки
+APP.get("/pull/info/:customer", (req, response) => {
+    MEDIA_POST_PROCESSOR.pullInfo(req.params.customer, data => new Promise((res, rej) => {
+        response.on("error", rej);
+        response.on("finish", res);
 
-            for (const current of completed.result) {
-                form.append("files", createReadStream(current), encodeURIComponent(basename(current)));
+        if (_.isEmpty(data)) {
+            response.status(204).end();
+        } else {
+            response.json(data).end();
+        }
+    }));
+});
+
+// Получение следующих обработанных файлов
+APP.get("/pull/files/:customer", (req, response) => {
+    MEDIA_POST_PROCESSOR.pullCompleted(
+        req.params.customer,
+        completed => new Promise((res, rej) => {
+            response.on("error", rej);
+
+            if (completed) {
+                response.on("finish", () => rm(completed.directory, { recursive: true }).then(res));
+
+                const form = new FormData();
+
+                form.append("_id", completed.id);
+    
+                for (const current of completed.result) {
+                    form.append("files", createReadStream(current), encodeURIComponent(basename(current)));
+                }
+                
+                // Пишем форму в ответ
+                form.pipe(response.setHeader("Content-Type", `multipart/form-data; boundary=${form.getBoundary()}`),
+                    { end: true });
+            } else {
+                response.on("finish", res);
+                response.status(204).end();
             }
-
-            const pipe = form.pipe(response.setHeader("Content-Type", `multipart/form-data; boundary=${form.getBoundary()}`));
-
-            // При завершении обработки удаляем все файлы
-            pipe.on("finish", () => rm(completed.directory, { recursive: true }).then(res));
-
-            // При ошибке выбрасываем исключение
-            pipe.on("error", rej);
-
-            // При закрытии соединения отбрасываем
-            response.on("unpipe", res);
         })
-    }, () => response.end())
+    );
 });
 
 // Регистрация узла
@@ -53,8 +73,7 @@ APP.post("/register/:customer", bodyparser.json(), (req, res) => {
         .set(req.params.customer, req.body);
 
     // Успешный ответ
-    res.send({ status: "ok" });
-    res.end();
+    res.json({ status: "ok" }).end();
 });
 
 // Добавление медиафайла
@@ -62,24 +81,25 @@ APP.post("/add-media/:customer/:type", UPLOAD.single("file"), (req, res) => {
     const file = req.file;
 
     if (file == null) {
-        res.send({ status: "err", reason: "Файл не передан" });
-        res.end();
+        res.json({ status: "err", reason: "Файл не передан" });
         return;
     }
 
     const type: ProcessingType = req.params.type as ProcessingType;
-    const postProcessor = Container.get(MediaPostProcessor);
     const customerRegistry = Container.get(CustomerRegistry);
-    const result = postProcessor.process({
-        customer: req.params.customer,
-        name: decodeURIComponent(file.originalname),
-        pathToMedia: file.path,
-        type,
-        config: customerRegistry.get(req.params.customer).config[type]
-    });
 
-    res.send({ status: "ok", result });
-    res.end();
+    res
+        .json({
+            status: "ok",
+            result: MEDIA_POST_PROCESSOR.process({
+                customer: req.params.customer,
+                name: decodeURIComponent(file.originalname),
+                pathToMedia: file.path,
+                type,
+                config: customerRegistry.get(req.params.customer).config[type]
+            })
+        })
+    .end();
 });
 
 // Слушаем на порту APP_PORT

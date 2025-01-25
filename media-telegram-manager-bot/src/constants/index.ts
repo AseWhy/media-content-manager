@@ -12,7 +12,7 @@ export const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR ?? "./downloads";
 export const PROCESSOR_DIR = process.env.PROCESSOR_DIR ?? tmpdir();
 
 /** Интервал запроса данных с пост обработчиков */
-export const PULL_INTERVAL = process.env.PULL_INTERVAL ? parseInt(process.env.PULL_INTERVAL) : 15000;
+export const PULL_INTERVAL = process.env.PULL_INTERVAL ? parseInt(process.env.PULL_INTERVAL) : 5000;
 
 /** Токен бота */
 export const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
@@ -30,6 +30,20 @@ export const CONFIG: Config = JSON.parse(readFileSync(process.env.CONFIG_LOCATIO
 export type ConfigCategoryName = "music" | "tv" | "movies";
 
 /**
+ * Конфигурация доп. данных
+ */
+export type ConfigCategoryAdditional = {
+    /** Наименование поля */
+    name: string;
+    /** Сообщение пользователю */
+    message: string;
+    /** Функция обработки введеных данных */
+    processor: string;
+    /** Схема */
+    schema: Schema;
+}
+
+/**
  * Категория конфигурации
  */
 export type ConfigCategory = {
@@ -37,17 +51,10 @@ export type ConfigCategory = {
     ext:  string[];
     /** Наименование категории расширений */
     name: string;
-    /** Функция обработки наименования файла */
-    filenameProcessor: string;
+    /** Функция обработки пути сохранения файла */
+    pathFunction: string;
     /** Тип дополнительно запрашиваемых данных */
-    additional?: {
-        /** Сообщение пользователю */
-        message: string;
-        /** Функция обработки введеных данных */
-        processor: string;
-        /** Схема */
-        schema: Schema;
-    };
+    additional: ConfigCategoryAdditional[];
 }
 
 /**

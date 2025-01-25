@@ -3,6 +3,7 @@ import { FileData, StorageManager } from "../service/storageManager";
 import { listContent } from "../service";
 import { getChatData, updateChatData } from "../service/database";
 import { Container } from "typedi";
+import { CONFIG } from "../constants";
 
 import TelegramBot, { ChatId } from "node-telegram-bot-api";
 import humanFormat from "human-format";
@@ -28,7 +29,7 @@ export const FILES_LIST_CHAT_DATA = "filesList";
  * @param filter фильтр файлов
  */
 export async function filesList(chatId: ChatId, filter: string) {
-    const pattern = new RegExp(filter);
+    const pattern = filter ? new RegExp(filter) : getDefaultRegexpPattern();
     const files = await STORAGE_MANAGER.filesList((_, path) => !!path.match(pattern));
     updateChatData(chatId, FILES_LIST_CHAT_DATA, files);
     await BOT.sendMessage(chatId, createMessage(files, 0), { ...makePaginationKeyboard(KEYBOARD_PREFIX, 0, Math.trunc(files.length / PAGE_SIZE)),
@@ -65,4 +66,16 @@ function createMessage(files: FileData[], page: number = 0): string {
         }
         return result;
     })
+}
+
+/**
+ * Возвращает шаблон файлов RegExp по умолчанию
+ * @returns шаблон файлов RegExp по умолчанию
+ */
+function getDefaultRegexpPattern(): RegExp {
+    const extensions: string[] = [];
+    for (const config of Object.values(CONFIG.categories)) {
+        extensions.push(...config.ext);
+    }
+    return new RegExp(`[${extensions.map(extension => extension.replace(".", "\\.")).join("|")}]`)
 }

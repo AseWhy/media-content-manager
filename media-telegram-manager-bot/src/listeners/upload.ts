@@ -1,12 +1,13 @@
-import { TorrentError, TorrentService, TorrentStoredData } from "../service/torrent/torrentService";
+import { TorrentError, TorrentService } from "../service/torrent/torrentService";
 import { TorrentData } from "../service/torrent/torrentData";
 import { readFile } from "fs/promises";
-import { PanelData, PanelManager } from "../service/panelManager";
-import { CONFIG, ConfigCategory, ConfigCategoryName } from "../constants";
+import { PanelDownloadData, PanelManager, PanelPostProcessingData } from "../service/panelManager";
+import { CONFIG, ConfigCategoryName } from "../constants";
 import { cancelable, listContent, toLength } from "../service";
 import { validate } from "jsonschema";
 import { ChatStateManager } from "../service/telegram/chatStateManager";
 import { Container } from "typedi";
+import { MediaProgressData, PostProcessCompleteOrder, PostProcessOrder, ProcessingService } from "../service/processing/processingService";
 
 import _ from "lodash";
 import TelegramBot, { Message } from "node-telegram-bot-api";
@@ -20,6 +21,9 @@ const PANEL_MANAGER = Container.get(PanelManager);
 
 /** Менеджер состояния чата */
 const STATE_MANAGER = Container.get(ChatStateManager);
+
+/** Сервис пост обработки */
+const PROCESSING_SERVICE = Container.get(ProcessingService);
 
 /** Бот */
 const BOT = Container.get(TelegramBot);
@@ -60,21 +64,6 @@ async function parse(msg: Message): Promise<string | null> {
         }
     }
     return null;
-}
-
-/**
- * Функция преобразования введенных данных пользователя в дополнительные данные
- * @param categoryData данные категории
- * @param input        введенные данные пользователя
- * @returns дополнительные данные
- */
-function computeDir(categoryData: ConfigCategory, input: string) {
-    const additional = categoryData.additional;
-    if (additional == null) {
-        return null;
-    }
-    const processor = new Function("input", additional.processor);
-    return processor(input);
 }
 
 /**
@@ -123,13 +112,14 @@ STATE_MANAGER.on("state:upload_category", async (msg: Message, { magnet, name },
     // Проверяем что категория действиетльная
     if (category in CONFIG.categories) {
         const categoryData = CONFIG.categories[category as ConfigCategoryName];
+        const additional = categoryData.additional;
 
-        STATE_MANAGER.state(chatId, "upload_additional", { magnet, category, name });
+        STATE_MANAGER.state(chatId, "upload_additional", { magnet, category, name, additionalIdx: 0, additionalData: {} });
 
-        if (categoryData.additional) {
-            await BOT.sendMessage(chatId, cancelable(categoryData.additional.message));
-        } else {
+        if (_.isEmpty(additional)) {
             STATE_MANAGER.process(msg);
+        } else {
+            await BOT.sendMessage(chatId, cancelable(additional[0].message));
         }
     } else {
         await BOT.sendMessage(chatId, MESSAGE_CATEGORY_LIST, { parse_mode: "HTML" });
@@ -137,7 +127,7 @@ STATE_MANAGER.on("state:upload_category", async (msg: Message, { magnet, name },
 });
 
 // Обработку получения дополнительных данных (Сезон, Альбом)
-STATE_MANAGER.on("state:upload_additional", async (msg: Message, { magnet, category, name }, { message, chatId }) => {
+STATE_MANAGER.on("state:upload_additional", async (msg: Message, { magnet, category, name, additionalIdx, additionalData }, { message, chatId }) => {
     if (message === '/cancel') {
         await BOT.sendMessage(chatId, MESSAGE_UPLOAD_CANCEL);
         STATE_MANAGER.flush(chatId);
@@ -145,14 +135,27 @@ STATE_MANAGER.on("state:upload_additional", async (msg: Message, { magnet, categ
     }
 
     const categoryData = CONFIG.categories[category as ConfigCategoryName];
+    const additional = categoryData.additional[additionalIdx];
 
-    if (categoryData.additional && !validate(message, categoryData.additional.schema).valid) {
-        await BOT.sendMessage(chatId, cancelable(categoryData.additional.message));
+    if (additional) {
+        if (validate(message, additional.schema).valid) {
+            STATE_MANAGER.state(chatId, "upload_additional", { magnet, category, name, additionalIdx: additionalIdx + 1,
+                additionalData: { ...additionalData, [additional.name]: message.trim() } });
+            const nextAdditional = categoryData.additional[additionalIdx + 1];
+            if (nextAdditional) {
+                await BOT.sendMessage(chatId, cancelable(nextAdditional.message));
+            } else {
+                // В случае, если это последние запрошенные данные то завершаем цикл
+                STATE_MANAGER.process(msg);
+            }
+        } else {
+            await BOT.sendMessage(chatId, cancelable(additional.message));
+        }
     } else {
         try {
             const downalodResult = await TORRENT_SERVICE.download({
                 category: category as ConfigCategoryName,
-                magnet, name, dir: computeDir(categoryData, message),
+                magnet, name, additionalData,
                 data: { chatId }
             });
     
@@ -167,10 +170,31 @@ STATE_MANAGER.on("state:upload_additional", async (msg: Message, { magnet, categ
                 await BOT.sendMessage(chatId, e.message);
             }
             console.error(e);
+        } finally {
+            STATE_MANAGER.flush(chatId);
         }
-
-        STATE_MANAGER.flush(chatId);
     }
+});
+
+// Действие при прогрессе пост обработки
+PROCESSING_SERVICE.on("progress", (events: MediaProgressData[]) => {
+    const eventGroups = _.groupBy(events, e => e.order.data.chatId);
+    for (const key in eventGroups) {
+        const panel = PANEL_MANAGER.getPanel(key);
+        for (const event of eventGroups[key]) {
+            panel.add(event.key, new PanelPostProcessingData(event.order.name, event.info?.progress ?? 0, event.info?.speed ?? 0));
+        }
+    }
+});
+
+// Действие при ошибке пост обработки
+PROCESSING_SERVICE.on("error", (id: string, order: PostProcessOrder) => {
+    PANEL_MANAGER.getPanel(order.data.chatId).remove(id);
+});
+
+// Действие при завершении пост обработки
+PROCESSING_SERVICE.on("done", (id: string, order: PostProcessCompleteOrder) => {
+    PANEL_MANAGER.getPanel(order.order.data.chatId).remove(id);
 });
 
 // Действие при окончании загрузки
@@ -187,14 +211,14 @@ TORRENT_SERVICE.on("download", (torrent: TorrentData) => {
     const panel = PANEL_MANAGER.getPanel(torrent.data.chatId);
     const files = torrent.files;
 
-    panel.add(torrent.id, new PanelData(torrent.name, torrent.downloadSpeed, torrent.size, torrent.downloaded, torrent.progress, false));
+    panel.add(torrent.id, new PanelDownloadData(torrent.name, torrent.downloadSpeed, torrent.size, torrent.downloaded, torrent.progress, false));
 
     // Нет смысл отображать единственный файл в загрузке, который ещё и называется как сам торрент
     if (files.length === 1 && files[0].name === torrent.name) {
         return;
     }
     for (const { name, size, downloaded, progress } of files) {
-        panel.add(torrent.id + name, new PanelData(`- ${name}`, 0, size, downloaded, progress, true));
+        panel.add(torrent.id + name, new PanelDownloadData(`- ${name}`, 0, size, downloaded, progress, true));
     }
 });
 

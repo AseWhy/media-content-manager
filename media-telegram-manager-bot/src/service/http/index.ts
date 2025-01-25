@@ -21,9 +21,15 @@ export function fetch(url: string, options: FetchOptions): Promise<IncomingMessa
                 httpRequest.setHeader("Content-Length", data.byteLength);
                 httpRequest.setHeader("Content-Type", "application/json");
     
-                httpRequest.write(data);
+                httpRequest.write(data, error => {
+                    if (error) {
+                        return rej(error);
+                    }
+                    httpRequest.end();
+                });
+            } else {
+                httpRequest.end();
             }
-            httpRequest.end();
         }
 
         httpRequest.on("response", res);
@@ -42,6 +48,29 @@ export function form(url: string, data: FormData): Promise<IncomingMessage> {
 }
 
 /**
+ * Выполняет запрос на переданный массив узлов, массив успешных ответов от узлов
+ * @param gateways массив узлов запроса
+ * @param path     путь для запроса для каждого узла
+ * @param options  опции запроса
+ */
+export async function fetchOnSuccessGatewayResponse(gateways: string[], path: string, options: FetchOptions): Promise<SingleSuccessGateway[]> {
+    const result: SingleSuccessGateway[] = [];
+    for (const gateway of gateways) {
+        try {
+            const response = await fetch(gateway + path, options);
+            if (response.statusCode !== 200) {
+                continue;
+            }
+            console.log(`Получен ответ при запросе ${gateway} [${path}] => ${response.statusCode}`);
+            result.push({ gateway, response });
+        } catch(e) {
+            console.error(`Ошибка запроса к '${gateway}' [${path}]`, e);
+        }
+    }
+    return result;
+}
+
+/**
  * Json поле
  */
 export type JsonDataField = Record<string, JsonData | string | number>;
@@ -51,6 +80,16 @@ export type JsonDataField = Record<string, JsonData | string | number>;
  */
 export interface JsonData extends JsonDataField {
 
+}
+
+/**
+ * Результат запроса на узел
+ */
+export type SingleSuccessGateway = {
+    /** Адрес узла */
+    gateway: string;
+    /** Полученный ответ от узла */
+    response: IncomingMessage;
 }
 
 /**

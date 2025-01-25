@@ -2,18 +2,19 @@ import { CONFIG, ConfigCategoryName, PROCESSOR_DIR, PULL_INTERVAL } from "../../
 import { Service } from "typedi";
 import { FSDB } from "file-system-db";
 import { v7 } from "uuid";
-import { join } from "path";
+import { basename, dirname, join } from "path";
 import { createReadStream } from "fs";
 import { createWriteStream, existsSync } from "fs";
 import { mkdir, rm } from "fs/promises";
 import { json } from "stream/consumers";
-import { form, fetch } from "../http";
+import { form, fetch, fetchOnSuccessGatewayResponse } from "../http";
 import { getSystemErrorName } from "util";
 import { IncomingMessage } from "http";
 
 import busboy from "busboy";
 import EventEmitter from "events";
 import FormData from "form-data";
+import _ from "lodash";
 
 /** База данных обработчика */
 const DATABASE = new FSDB("./data/post-processing.json", false);
@@ -34,15 +35,6 @@ export class ProcessingService extends EventEmitter {
     private readonly _gateways: string[] = [];
 
     /**
-     * Конструктор
-     */
-    constructor() {
-        super();
-        // Выполняем запрос новых данных раз в 15 секунд
-        setTimeout(this._pull.bind(this), PULL_INTERVAL);
-    }
-
-    /**
      * Инициализирует сервис постобработки
      */
     public async init(): Promise<void> {
@@ -51,25 +43,29 @@ export class ProcessingService extends EventEmitter {
         }
         await this._registration();
         await this._onConsume();
+        // Выполняем запрос новых данных
+        setTimeout(this._pullProgress.bind(this), PULL_INTERVAL);
     }
 
     /**
      * Добавляет заказ на постобработку
      * @param path        путь до медиафайла для постобработки
-     * @param destination директория для сохранения обработанных файлов
-     * @param type        тип медиаконтента
-     * @param name        имя файла, под которым он будет сохранен после обработки
+     * @param destination путь до файла файла, под которым он будет сохранен после обработки
+     * @param category    категория медиаконтента
+     * @param data        дополнительные данные
      */
-    async process(path: string, destination: string, name: string, type: ConfigCategoryName): Promise<void> {
-        console.log(`Отправка медиафайла "${path}" [${name}] на постобработку`);
+    async process(path: string, destination: string, category: ConfigCategoryName,  data: Record<string, string>): Promise<void> {
+        const filename = basename(destination);
+
+        console.log(`Отправка медиафайла "${path}" [${filename}] на постобработку`);
 
         for (const gateway of CONFIG.postProcessing.gateways) {
             try {
-                const data = new FormData();
+                const formData = new FormData();
 
-                data.append("file", createReadStream(path), encodeURIComponent(name));
+                formData.append("file", createReadStream(path), encodeURIComponent(filename));
 
-                const response = await form(`${gateway}/add-media/${CONFIG.nodeId}/${type}`, data)
+                const response = await form(`${gateway}/add-media/${CONFIG.nodeId}/${category}`, formData)
 
                 if (response.statusCode !== 200) {
                     throw new Error("Неожиданный ответ сервера постобработки '" + response.statusCode + "'");
@@ -85,7 +81,7 @@ export class ProcessingService extends EventEmitter {
                     continue
                 }
 
-                DATABASE.set(`${PROCESSING_KEY}.${id}`, { destination });
+                DATABASE.set(`${PROCESSING_KEY}.${id}`, { dest: dirname(destination), name: filename, data });
 
                 return;
             } catch(e) {
@@ -119,7 +115,6 @@ export class ProcessingService extends EventEmitter {
                 console.error(`Ошибка подключения к '${gateway}'`, e.message);
             }
         }
-
         console.log("Для пост обработки используются узлы", this._gateways);
     }
 
@@ -133,7 +128,7 @@ export class ProcessingService extends EventEmitter {
             const order = consumed[key];
             try {
                 for (const listener of this.listeners("done")) {
-                    await listener(order);
+                    await listener(key, order);
                 }
                 DATABASE.delete(`${CONSUMED_KEY}.${key}`);
             } catch(e) {
@@ -153,8 +148,8 @@ export class ProcessingService extends EventEmitter {
         } else {
             const order: PostProcessOrder = DATABASE.get(`${PROCESSING_KEY}.${id}`);
 
-            // Выводим сообщение в лог
-            console.log(`Получены обработанные медиафайлы для заказа ${id} типа ${order.destination}\n${files.map(filePath => `\t${filePath}`).join("\n")}`);
+            console.log(`Получены обработанные медиафайлы для заказа ${id} типа ${order.name}\n${files.map(
+                filePath => `\t${filePath}`).join("\n")}`);
 
             DATABASE.set(`${CONSUMED_KEY}.${id}`, { order, files });
 
@@ -163,13 +158,24 @@ export class ProcessingService extends EventEmitter {
             await this._onConsume();
         }
     }
+    
+    /**
+     * Действие при ошибке пост обработки медиафайла
+     * @param key ключ для получения обработки
+     */
+    private async _onError(key: string) {
+        console.warn(`При обработке файла '${key}' произошла ошибка, удаление обработки...`);
+        const processing = DATABASE.get(`${PROCESSING_KEY}.${key}`);
+        this.emit("error", key, processing);
+        DATABASE.delete(`${PROCESSING_KEY}.${key}`);
+    }
 
     /**
      * Обрабатывает данные полученные из запроса вытягивания
      * @param gateway  адрес узла для запроса
      * @param response ответ на запрос вытягивания
      */
-    private _prcessPull(gateway: string, response: IncomingMessage): Promise<void> {
+    private _processPullFiles(gateway: string, response: IncomingMessage): Promise<void> {
         return new Promise<void>(async (res, rej) => {
             const bb = busboy({ headers: response.headers });
             const tmpDir = join(PROCESSOR_DIR, v7());
@@ -193,14 +199,13 @@ export class ProcessingService extends EventEmitter {
             bb.once("finish", async () => {
                 await this._onDone(files, data);
                 await rm(tmpDir, { recursive: true });
+                res();
             });
 
             bb.once("error", async err => {
                 await rm(tmpDir, { recursive: true });
                 rej(err);
             });
-
-            bb.on("close", res);
 
             if (response) {
                 response.pipe(bb);
@@ -212,27 +217,96 @@ export class ProcessingService extends EventEmitter {
 
     /**
      * Выполняет запрос новых элементов обработчика
+     * @param gateway узел для запроса
      */
-    private async _pull(): Promise<void> {
-        let activated = false;
-        for (const gateway of this._gateways) {
-            try {
-                const response = await fetch(`${gateway}/pull/${CONFIG.nodeId}`, { method: "GET" });
-
-                if (response.statusCode === 200 && response.headers["content-length"] !== '0') {
-                    console.log("Обработка ответа данных с узла", gateway);
-    
-                    await this._prcessPull(gateway, response);
-    
-                    activated = true;
-                }
-            } catch(e) {
-                console.error(`Ошибка подключения к '${gateway}'`, e);
-            }
-        }
-        // Выполняем следующий запрос
-        setTimeout(this._pull.bind(this), activated ? 1000 : PULL_INTERVAL);
+    private async _pullFiles(gateway: string): Promise<void> {
+        console.log(`Получение обработанных файлов с узла "${gateway}"`);
+        // Запрашиваем данные с узла
+        const data = await fetchOnSuccessGatewayResponse([ gateway ], `/pull/files/${CONFIG.nodeId}`, { method: "GET" });
+        // Обрабатываем результат
+        await Promise.all(data.map(nodeData => this._processPullFiles(nodeData.gateway, nodeData.response)));
     }
+
+    /**
+     * Выполняет запрос новых элементов обработчика
+     */
+    private async _pullProgress(): Promise<void> {
+        let data;
+        try {
+            data = await fetchOnSuccessGatewayResponse(this._gateways, `/pull/info/${CONFIG.nodeId}`, { method: "GET" });
+
+            // Получаем текущие обработки
+            const processings: Record<string, PostProcessOrder> = DATABASE.get(PROCESSING_KEY);
+            const gatewaysToPullFiles: Record<string, number> = {};
+            const processingInfos: Record<string, MediaProcessingInfo> = {};
+            const processingToDelete: string[] = [];
+
+            // Обрабатываем результат
+            await Promise.all(data.map(async nodeData => {
+                const data = await json(nodeData.response) as Record<string, MediaProcessingInfo>;
+                for (const key in data) {
+                    const entry = data[key];
+                    if (entry.status === 'completed') {
+                        if (gatewaysToPullFiles[nodeData.gateway] == null) {
+                            gatewaysToPullFiles[nodeData.gateway] = 0;
+                        }
+                        gatewaysToPullFiles[nodeData.gateway]++;
+                    } else if (entry.status === 'error') {
+                        processingToDelete.push(key);
+                    }
+                }
+                // Добавляем данные
+                Object.assign(processingInfos, data);
+            }));
+
+            // Удаляем данные об обработках, в которых произошла ошибка
+            for (const key of processingToDelete) {
+                this._onError(key);
+                delete processings[key];
+            }
+
+            // Уведомляем подписчиков обработки
+            this.emit("progress", _(processings).entries()
+                .map(([ key, order ]) => ({ info: processingInfos[key], order, key })).value());
+
+            // Ожидаем загрузки файлов при необходимости
+            for (const [ gateway, count ] of _.entries(gatewaysToPullFiles)) {
+                for (let i = 0; i < count; i++) {
+                    // Ожидаем загрузки файлов
+                    await this._pullFiles(gateway);
+                }
+            }
+        } catch(e) {
+            console.error("Ошибка при выполнении запроса получения прогресса пост обработки", e);
+        } finally {
+            // Выполняем следующий запрос
+            setTimeout(this._pullProgress.bind(this), data === null ? PULL_INTERVAL : 1000);
+        }
+    }
+}
+
+/**
+ * Данные прогресс обаботки медиафайла
+ */
+export type MediaProgressData = {
+    /** Информация об обработке */
+    info?: MediaProcessingInfo;
+    /** Заказ на постобработку */
+    order: PostProcessOrder;
+    /** Ключ пост обработки */
+    key: string;
+};
+
+/**
+ * Информация о ходе обработки медиафайла
+ */
+export type MediaProcessingInfo = {
+    /** Статус обработки */
+    status: "processing" | "completed" | "error";
+    /** Скорость обработки % в секунду */
+    speed: number;
+    /** Прогресс обработки */
+    progress: number;
 }
 
 /**
@@ -240,7 +314,11 @@ export class ProcessingService extends EventEmitter {
  */
 export type PostProcessOrder = {
     /** Путь до директории назначения */
-    destination: string;
+    dest: string;
+    /** Наименование файла назначения */
+    name: string;
+    /** Дополнительные данные заказа */
+    data: Record<string, string>;
 }
 
 /**

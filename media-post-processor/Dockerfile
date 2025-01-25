@@ -1,9 +1,9 @@
 FROM node:20.18.1
 
 # Устанавливаем кодировку
-ENV LANGUAGE ru_RU.UTF-8
-ENV LANG ru_RU.UTF-8
-ENV LC_ALL ru_RU.UTF-8
+ENV LANGUAGE UTF-8
+ENV LANG UTF-8
+ENV LC_ALL UTF-8
 
 # Создаем рабочий каталог
 RUN mkdir -p /opt/common; \

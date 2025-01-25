@@ -2,8 +2,10 @@ import { FSDB } from "file-system-db";
 import { hash } from "crypto";
 import { Service } from "typedi";
 import { CustomerOrder, CustomerOrderProcessing, MediaProcessor } from "./processors/mediaProcessor";
-import { VideoMediaProcessor } from "./processors/videoMediaProcessor";
+import { ProgressData, VideoMediaProcessor } from "./processors/videoMediaProcessor";
 import { rm } from "fs/promises";
+import { CONFIG } from "../../contants";
+import { SpeedIndicator } from "../speedIndicator";
 
 import EventEmitter from "events";
 import _ from "lodash";
@@ -26,23 +28,31 @@ export class MediaPostProcessor extends EventEmitter {
     /** Карта, где ключ это путь до медиафайла а значение это запись обработки */
     private readonly _currentProcessing: Record<string, CustomerOrder> = {};
 
-    /** Максимальное количество постобработок в одно время */
-    private readonly _maxTasks = 2;
-
     /** Карта, где ключ это тип содержимого а значение это функция обработки */
     private readonly _processors: Record<string, MediaProcessor>;
 
     /** Набор аткивных заказчиков постобработки, у которых в данный момент выполнятся запрос данных */
     private readonly _activeRequests: Set<string> = new Set();
 
+    /** Информация о ходе обработки медиафайлов */
+    private readonly _info: Record<string, Record<string, MediaProcessingInfo>> = {};
+
+    /** Индикатор скорости обработки */
+    private readonly _speed: Record<string, SpeedIndicator> = {};
+
     /**
      * Конструктор
      */
     constructor() {
         super();
+
         const videoProcessor = new VideoMediaProcessor();
+
         this._processors = { "movies": videoProcessor, "tv": videoProcessor };
+
         videoProcessor.on("done", this._onDone.bind(this));
+        videoProcessor.on("progress", this._onProgress.bind(this));
+        videoProcessor.on("error", this._onError.bind(this));
     }
 
     /**
@@ -69,32 +79,60 @@ export class MediaPostProcessor extends EventEmitter {
     /**
      * Восстанавливает обработку медиафайлов
      */
-    public init() {
+    public init(): void {
+        const completed = this._getCompleted();
+        for (const key in completed) {
+            // Помечаем завершенные обработки как завершенные
+            this._markProcessingAsDone(completed[key].customer, key);
+        }
         this._processNext();
     }
 
     /**
+     * Возвращает данные прогресса пост обработки
+     * @param заказчик постобработки
+     */
+    public async pullInfo(customer: string, process: (completed: Record<string, MediaProcessingInfo> | null) => Promise<void>): Promise<void> {
+        const data = this._info[customer] ?? {};
+        try {
+            await process(data);
+            if (_.isEmpty(data)) {
+                return;
+            }
+            for (const key in data) {
+                // Удаляем все ключи с ошибками при успешной обработке
+                if (data[key].status === 'error') {
+                    delete data[key];
+                }
+            }
+        } catch(e) {
+            console.error("Ошибка при получении информации о текущих обработках", e);
+        }
+    }
+
+    /**
      * Возвращает получает и удаляет из обработанных первый завершенный заказ
-     * @param customer   заказчик постобработки
-     * @param oneElement обработчик получения одного элемента
-     * @param noElements обработчик отсутствия элементов для получения
+     * @param customer заказчик постобработки
+     * @param process  обработчик получения обработанных файлов
      * @returns завершенный заказ
      */
-    public async pullCompleted(customer: string, oneElement: (completed: CustomerOrderProcessing) => Promise<void>, noElements: () => void): Promise<void> {
+    public async pullCompleted(customer: string, process: (completed: CustomerOrderProcessing | null) => Promise<void>): Promise<void> {
         // Ищем первый заказ
-        const completed: Record<string, CustomerOrderProcessing> = DATABASE.get(COMPLETED_KEY) ?? {};
-        const first = Object.entries(completed).filter(item => item[1].customer === customer).map(item => item[0])[0];
+        const first = Object.entries(this._getCompleted()).find(item => item[1].customer === customer);
 
         if (first == null || this._activeRequests.has(customer)) {
-            noElements();
+            process(null);
         } else {
+            const [ key, completed ] = first;
             try {
                 this._activeRequests.add(customer);
-                await oneElement(completed[first]);
-                delete completed[first];
-                DATABASE.set(COMPLETED_KEY, completed);
+                await process(completed);
+                if (this._info[customer]) {
+                    delete this._info[customer][key];
+                }
+                DATABASE.delete(`${COMPLETED_KEY}.${key}`);
             } catch(e) {
-                console.error(e);
+                console.error("Ошибка при получении последнего обработанного элемента", e);
             } finally {
                 this._activeRequests.delete(customer);
             }
@@ -102,23 +140,21 @@ export class MediaPostProcessor extends EventEmitter {
     }
 
     /**
-     * Восстанавливает обработки с предыдущего запуска
+     * Действие при ошибке
+     * @param processing обрабатываемый медиафайл
      */
-    private async _processNext() {
-        const bag: Promise<void>[] = [];
-        for (const [ id, order ] of Object.entries(this._allProcessing())) {
-            if (id in this._currentProcessing) {
-                continue;
-            }
-            if (bag.push(this._process(id, order)) >= this._maxTasks) {
-                break;
-            }
+    private async _onError(processing: CustomerOrderProcessing) {
+        if (this._info[processing.customer] == null) {
+            this._info[processing.customer] = {};
         }
-        if (bag.length === 0) {
-            return;
-        }
-        await Promise.all(bag);
-        this._processNext();
+        // Редактируем статус обработки
+        this._info[processing.customer][processing.id] = { status: "error", progress: 100, speed: 0 };
+        // Удаляем из обрабатываемых
+        this._delFromProcess(processing.id);
+        // Удаляем индикатор скорости
+        delete this._speed[processing.id];
+        // Удаляем медиафайл
+        await rm(processing.pathToMedia);
     }
 
     /**
@@ -129,8 +165,66 @@ export class MediaPostProcessor extends EventEmitter {
         // Помечаем как исполненный
         this._addToCompleted(processing.id, processing);
         this._delFromProcess(processing.id);
+        // Помечаем как обработанное
+        this._markProcessingAsDone(processing.customer, processing.id);
+        // Удаляем индикатор скорости
+        delete this._speed[processing.id];
         // Удаляем медиафайл
         await rm(processing.pathToMedia);
+    }
+
+    /**
+     * Действие при завершении выполнения обработки медиафайла
+     * @param id       идентификатор медиафайла
+     * @param order    заказ на обработку
+     * @param progress данные прогресса
+     */
+    private _onProgress(id: string, order: CustomerOrder, progress: ProgressData) {
+        const progressInt = progress.percent ?? 0;
+        if (this._info[order.customer] == null) {
+            this._info[order.customer] = {};
+        }
+        if (this._speed[id] == null) {
+            this._speed[id] = new SpeedIndicator(progressInt * 100);
+        } else {
+            this._speed[id].update(progressInt);
+        }
+        this._info[order.customer][id] = { status: "processing", progress: _.round(progressInt, 2), speed: this._speed[id].speed };
+    }
+
+    /**
+     * Помечает обработку как завершенную
+     * @param customer заказчик обработки
+     * @param id       идентификатор обработки
+     */
+    private _markProcessingAsDone(customer: string, id: string) {
+        if (this._info[customer] == null) {
+            this._info[customer] = {};
+        }
+        // Устанавливаем прогресс загрузки на 100%
+        this._info[customer][id] = { status: "completed", progress: 100, speed: 0 };
+    }
+
+    /**
+     * Восстанавливает обработки с предыдущего запуска
+     */
+    private async _processNext() {
+        const existsKeys = _.keys(this._currentProcessing).length;
+        const bag: Promise<void>[] = [];
+        for (const [ id, order ] of Object.entries(this._allProcessing())) {
+            if (id in this._currentProcessing) {
+                continue;
+            }
+            if (bag.length + existsKeys >= CONFIG.maxTasks) {
+                break;
+            }
+            bag.push(this._process(id, order));
+        }
+        if (bag.length === 0) {
+            return;
+        }
+        await Promise.all(bag);
+        this._processNext();
     }
 
     /**
@@ -146,8 +240,16 @@ export class MediaPostProcessor extends EventEmitter {
 
             delete this._currentProcessing[id];
         } catch(e) {
-            console.error(e);
+            console.error("Ошибка при обработке медиа", e);
         }
+    }
+
+    /**
+     * Возвращает карту, где ключ это идентификатор обработки и значение это сама обработка
+     * @returns карта, где ключ это идентификатор обработки и значение это сама обработка
+     */
+    private _getCompleted(): Record<string, CustomerOrderProcessing> {
+        return DATABASE.get(COMPLETED_KEY) ?? {};
     }
 
     /**
@@ -202,6 +304,18 @@ function factory() {
     const processor = new MediaPostProcessor();
     processor.init();
     return processor;
+}
+
+/**
+ * Информация о ходе обработки медиафайла
+ */
+export type MediaProcessingInfo = {
+    /** Статус обработки */
+    status: "processing" | "completed" | "error";
+    /** Скорость обработки % в секунду */
+    speed: number;
+    /** Прогресс обработки */
+    progress: number;
 }
 
 /**

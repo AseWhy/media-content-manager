@@ -6,6 +6,7 @@ import { BOT_ALLOWED_USER_IDS, BOT_TOKEN, CONFIG, DOWNLOAD_DIR, DOWNLOAD_LIMIT, 
 import { filesDelete, KEYBOARD_PREFIX as DELETE_FILES_KEYBOARD_PREFIX, filesDeleteConfirmed } from "./listeners/filesDelete";
 import { filesList, filesListPagable, KEYBOARD_PREFIX as LIST_FILES_KEYBOARD_PREFIX } from "./listeners/filesList";
 import { filesMove, filesMovePagable, KEYBOARD_PREFIX as MOVE_FILES_KEYBOARD_PREFIX } from "./listeners/filesMove";
+import { panel } from './listeners/panel';
 import { filesRename } from "./listeners/filesRename";
 import { start } from "./listeners/start";
 import { upload } from "./listeners/upload";
@@ -55,11 +56,12 @@ BOT.on("message", async msg => {
         if (text == null || msg.document || text.match(/(magnet:[aA-zZ?=:0-9&.+_\/%]+)/g)) {
             await upload(msg);
         } else {
-            const splitMessage = text.split("_");
+            const splitMessage = text.split(/[_ ]+/g);
             switch(splitMessage[0]) {
                 case "/start": await start(msg); break;
-                case "/files": await filesList(msg.chat.id, text.split(" ", 2)[1]); break;
+                case "/files": await filesList(msg.chat.id, splitMessage[1]); break;
                 case "/delete": await filesDelete(msg, splitMessage); break;
+                case "/panel": panel(msg.chat.id); break;
                 case "/rename": await filesRename(msg, splitMessage); break;
                 case "/move": await filesMove(msg, splitMessage); break;
                 default: STATE_MANAGER.process(msg); break;
@@ -70,16 +72,20 @@ BOT.on("message", async msg => {
     }
 });
 
-// Инициализируем
-PROCESSING_SERVICE.init();
-
 /** Устанавливаем список комманд */
 BOT.setMyCommands([
     {
         command: "/files",
         description: "Отображает список файлов"
+    },
+    {
+        command: "/panel",
+        description: "Выводит панель в последнем сообщении текущего чата"
     }
 ], { language_code: "ru" });
+
+// Инициализируем
+PROCESSING_SERVICE.init();
 
 // Устанавливаем максимальное количество слушателей
 EventEmitter.setMaxListeners(100);

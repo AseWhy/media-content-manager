@@ -5,7 +5,10 @@
         "gateways": ["http://192.168.0.244:1949"],
         "config": {
             "movies": {
-                "resolutions": [ "720p", "1080p", "2160p" ],
+                "outputs": {
+                    "mode":    "always",
+                    "names": [ "720p", "1080p", "2160p" ]
+                },
                 "stream": {
                     "audio": {
                         "type": "object",
@@ -44,7 +47,10 @@
                 }
             },
             "tv": {
-                "resolutions": [ "720p", "1080p" ],
+                "outputs": {
+                    "mode":    "first",
+                    "names": [ "720p", "1080p", "2160p" ]
+                },
                 "stream": {
                     "audio": {
                         "language": {
@@ -63,37 +69,42 @@
     "categories": {
         "movies": {
             "ext":  [ ".mov", ".avi", ".mkv", ".mp4" ],
-            "filenameProcessor": "return `${name}${i === 0 ? '' : ' ' + i}${ext}`",
-            "name": "Фильмы"
+            "pathFunction": "return `${name}/${i === 0 ? '' : i + ' '}${name}${ext}`",
+            "name": "Фильмы",
+            "additional": []
         },
         "tv": {
             "ext":  [ ".mov", ".avi", ".mkv", ".mp4" ],
             "name": "Сериалы",
-            "filenameProcessor": "return `${name}E${i < 10 ? '0' + i : i}`",
-            "additional": {
-                "message": "Введите номер сезона от 0 до 99.",
-                "processor": "return `Season ${input.length !== 2 ? input.padStart(2, '0'}` : input) + ext",
-                "schema": {
-                    "minLength": 1,
-                    "maxLength": 2,
-                    "pattern": "^\\d+$",
-                    "type": "string"
+            "pathFunction": "return `${name}/Season ${season.length !== 2 ? season.padStart(2, '0') : season}/${name} S${season < 10 ? '0' + season : season}E${i < 9 ? '0' + (i + 1) : i + 1}${ext}`",
+            "additional": [
+                {
+                    "name": "season",
+                    "message": "Введите номер сезона от 1 до 99.",
+                    "schema": {
+                        "minLength": 1,
+                        "maxLength": 2,
+                        "pattern": "^[1-9][0-9]?$",
+                        "type": "string"
+                    }
                 }
-            }
+            ]
         },
         "music": {
             "ext":  [ ".mp3", ".flac" ],
             "name": "Музыка",
-            "filenameProcessor": "return filename + ext",
-            "additional": {
-                "message": "Введите наименование альбома.",
-                "processor": "return input",
-                "schema": {
-                    "minLength": 3,
-                    "maxLength": 100,
-                    "type": "string"
+            "pathFunction": "return `${name}/${album}/${filename}${ext}`",
+            "additional": [
+                {
+                    "name": "album",
+                    "message": "Введите наименование альбома.",
+                    "schema": {
+                        "minLength": 3,
+                        "maxLength": 100,
+                        "type": "string"
+                    }
                 }
-            }
+            ]
         }
     }
 }

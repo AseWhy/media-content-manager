@@ -31,6 +31,8 @@ export type Config = {
     processing: ProcessingConfig;
     /** Приоритет процессов постобработки от -20 до 20 */
     priority: number;
+    /** Максимальное количество одновременно выполняемых задач пост обработки */
+    maxTasks: number;
 }
 
 /**
@@ -38,9 +40,9 @@ export type Config = {
  */
 export type ProcessingConfig = {
     /** Конфигурация постобработки фильмов */
-    movies: VideoProcessingConfigRule<ProcessingResolutions>;
+    movies: VideoProcessingConfigRule;
     /** Конфигурация постобработки тв шоу */
-    tv: VideoProcessingConfigRule<"720p" | "1080p">;
+    tv: VideoProcessingConfigRule;
 }
 
 /**
@@ -58,9 +60,9 @@ export type VideoProcessingConfigAdditionalParamsConfig = {
 /**
  * Правило постобработки
  */
-export type VideoProcessingConfigRule<Name> = {
+export type VideoProcessingConfigRule = {
     /** Конфигурация постобработки */
-    outputs: VideoProcessingOutputConfig<Name>[];
+    outputs: VideoProcessingOutputConfig[];
     /** Функция получения названия выходящего файла */
     filenameFunction: string;
     /** Видео кодек */
@@ -74,9 +76,9 @@ export type VideoProcessingConfigRule<Name> = {
 /**
  * Конфигурация выхода пост обработчика
  */
-export type VideoProcessingOutputConfig<Name> = {
+export type VideoProcessingOutputConfig = {
     /** Наименование вывода */
-    name: Name;
+    name: ProcessingResolutions;
     /** Разрешения выхода */
     resolutions: [ number, number ][];
 }

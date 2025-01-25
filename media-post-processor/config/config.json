@@ -1,5 +1,6 @@
 {
     "priority": 20,
+    "maxTasks": 2,
     "processing": {
         "movies": {
             "filenameFunction": "return filename + ' - ' + name + ext",
@@ -13,6 +14,7 @@
                 ],
                 "output": [
                     "-q", "0",
+                    "-compression_level", "1",
                     "-preset", "fast",
                     "-vf", "scale_vaapi=w=${sampleWidth}:h=${sampleHeight}:format=nv12"
                 ]
@@ -103,7 +105,7 @@
             ]
         },
         "tv": {
-            "filenameFunction": "return filename + ' - ' + name + ext",
+            "filenameFunction": "return filename + ext",
             "videoCodec": "hevc_vaapi",
             "audioCodec": "eac3",
             "additinalParams": {
@@ -113,7 +115,7 @@
                     "-vaapi_device", "/dev/dri/renderD128"
                 ],
                 "output": [
-                    "-q", "5",
+                    "-q", "0",
                     "-preset", "fast",
                     "-vf", "scale_vaapi=w=${sampleWidth}:h=${sampleHeight}:format=nv12"
                 ]
