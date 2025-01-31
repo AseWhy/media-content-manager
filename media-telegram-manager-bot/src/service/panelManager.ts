@@ -1,8 +1,8 @@
-import { MessageWorker } from "./messageWorker";
-import { ProgressBar } from "./progressBar";
+import { MessageWorker } from "@service/messageWorker";
+import { ProgressBar } from "@service/progressBar";
 import { ChatId } from "node-telegram-bot-api";
 import { Service } from "typedi";
-import { toLength } from ".";
+import { toLength } from "@service";
 
 import _, { type DebouncedFunc, type DebouncedFuncLeading } from "lodash";
 import humanFormat from "human-format";
@@ -173,8 +173,8 @@ export class Panel {
                     computedRest += (data.size - data.downloaded) / data.speed * 1000;
                 }
             } else {
-                processing.push(`${computedName}: ${progressBar.render()} +${data.speed.toFixed(4)}%/S (${
-                    data.progress.toFixed(2)}%) до завершения ${formatDuration((100 - data.progress) / data.speed * 1000)}`);
+                processing.push(`${computedName}: ${progressBar.render()} +${data.speed.toFixed(4)}%/S (${data.progress.toFixed(2)}%)${
+                    data.speed && data.progress ? 'до завершения ' + formatDuration((100 - data.progress) / data.speed * 1000) : ""}`);
             }
         }
 

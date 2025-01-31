@@ -1,13 +1,13 @@
-import { TorrentError, TorrentService } from "../service/torrent/torrentService";
-import { TorrentData } from "../service/torrent/torrentData";
+import { TorrentError, TorrentService } from "@service/torrent/torrentService";
+import { TorrentData } from "@service/torrent/torrentData";
 import { readFile } from "fs/promises";
-import { PanelDownloadData, PanelManager, PanelPostProcessingData } from "../service/panelManager";
-import { CONFIG, ConfigCategoryName } from "../constants";
-import { cancelable, listContent, toLength } from "../service";
+import { PanelDownloadData, PanelManager, PanelPostProcessingData } from "@service/panelManager";
+import { CONFIG, ConfigCategoryName } from "@const";
+import { cancelable, listContent, toLength } from "@service";
 import { validate } from "jsonschema";
-import { ChatStateManager } from "../service/telegram/chatStateManager";
+import { ChatStateManager } from "@service/telegram/chatStateManager";
 import { Container } from "typedi";
-import { MediaProgressData, PostProcessCompleteOrder, PostProcessOrder, ProcessingService } from "../service/processing/processingService";
+import { MediaProgressData, PostProcessCompleteOrder, PostProcessOrder, ProcessingService } from "@service/processing/processingService";
 
 import _ from "lodash";
 import TelegramBot, { Message } from "node-telegram-bot-api";
@@ -168,8 +168,9 @@ STATE_MANAGER.on("state:upload_additional", async (msg: Message, { magnet, categ
         } catch(e) {
             if (e instanceof TorrentError) {
                 await BOT.sendMessage(chatId, e.message);
+            } else {
+                console.error(e);
             }
-            console.error(e);
         } finally {
             STATE_MANAGER.flush(chatId);
         }

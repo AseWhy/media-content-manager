@@ -1,10 +1,10 @@
-import { FileData, StorageManager } from "../service/storageManager";
+import { FileData, StorageManager } from "@service/storageManager";
 import { parse } from "path";
-import { cancelable } from "../service";
-import { getChatData } from "../service/database";
-import { FILES_LIST_CHAT_DATA } from "./filesList";
+import { cancelable } from "@service";
+import { getChatData } from "@service/database";
+import { FILES_LIST_CHAT_DATA } from "@listeners/filesList";
 import { Container } from "typedi";
-import { ChatStateManager } from "../service/telegram/chatStateManager";
+import { ChatStateManager } from "@service/telegram/chatStateManager";
 
 import TelegramBot, { Message } from "node-telegram-bot-api";
 

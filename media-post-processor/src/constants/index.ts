@@ -61,7 +61,7 @@ export type VideoProcessingConfigAdditionalParamsConfig = {
  * Правило постобработки
  */
 export type VideoProcessingConfigRule = {
-    /** Конфигурация постобработки */
+    /** Конфигурация постобработки в порядке приоритета (сначала наиболее приоритетные) */
     outputs: VideoProcessingOutputConfig[];
     /** Функция получения названия выходящего файла */
     filenameFunction: string;

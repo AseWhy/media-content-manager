@@ -1,4 +1,4 @@
-import { BOT_TOKEN } from "./constants";
+import { BOT_TOKEN } from "@const";
 import { Container } from "typedi";
 
 import TelegramBot from "node-telegram-bot-api";

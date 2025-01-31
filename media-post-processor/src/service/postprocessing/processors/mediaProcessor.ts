@@ -1,5 +1,5 @@
-import { ProcessingType } from "../../../contants";
-import { CustomerConfig } from "../../customerRegistry";
+import { ProcessingType } from "@const";
+import { CustomerConfig } from "@service/customerRegistry";
 
 /**
  * Структура заказа постобработки

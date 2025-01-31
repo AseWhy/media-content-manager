@@ -1,5 +1,5 @@
 import { FSDB } from "file-system-db";
-import { ProcessingType, VideoCodecType } from "../contants";
+import { ProcessingType, VideoCodecType } from "@const";
 import { Service } from "typedi";
 import { Schema } from "jsonschema";
 

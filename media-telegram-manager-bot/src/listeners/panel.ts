@@ -1,5 +1,5 @@
 import { Container } from "typedi";
-import { PanelManager } from "../service/panelManager";
+import { PanelManager } from "@service/panelManager";
 import { ChatId } from "node-telegram-bot-api";
 
 /** Менеджер панелей */

@@ -1,12 +1,12 @@
 import { join, parse } from "path";
-import { CONFIG, PROCESSING_DIR, VideoProcessingConfigRule, VideoProcessingOutputConfig } from "../../../contants";
+import { CONFIG, PROCESSING_DIR, VideoProcessingConfigRule, VideoProcessingOutputConfig } from "@const";
 import { CustomerOrder, CustomerOrderProcessing, MediaProcessor } from "./mediaProcessor";
 import { existsSync } from "fs";
 import { mkdir, rm } from "fs/promises";
-import { VideoCustomerStreamConfig, VideoOutputConfig } from "../../customerRegistry";
+import { VideoCustomerStreamConfig, VideoOutputConfig } from "@service/customerRegistry";
 import { validate } from "jsonschema";
-import { ffprobe } from "../../ffmpeg";
-import { VaInfo } from "../../vaInfo";
+import { ffprobe } from "@service/ffmpeg";
+import { VaInfo } from "@service/vaInfo";
 
 import EventEmitter from "events";
 import _ from "lodash";
@@ -266,7 +266,7 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
         const result: RequirementResolutionConfig[] = [];
         const ratio = (width / height).toFixed(2);
 
-        for (const output of _.reverse(outputs)) {
+        for (const output of outputs) {
             // Исключаем ненужные выходы
             if (!outputConfig.names.includes(output.name)) {
                 continue;
@@ -284,7 +284,7 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
             result.push({ ...output, sampleWidth: sampleResolution[0], sampleHeight: sampleResolution[1] });
             
             // Если конфигурация выхода - это первый совпавший выход, то прерываем цикл
-            if (outputConfig.mode === "first" && outputConfig.names.includes(output.name)) {
+            if (outputConfig.mode === "first") {
                 break;
             }
         }

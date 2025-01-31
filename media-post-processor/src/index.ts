@@ -2,7 +2,7 @@ import 'reflect-metadata';
 
 import { MediaPostProcessor } from "./service/postprocessing/mediaPostProcessor";
 import { CustomerRegistry } from "./service/customerRegistry";
-import { APP_PORT, PENDING_DIR, ProcessingType } from "./contants";
+import { APP_PORT, PENDING_DIR, ProcessingType } from "@const";
 import { Container } from "typedi";
 import { basename } from 'path';
 import { createReadStream } from 'fs';

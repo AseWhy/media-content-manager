@@ -1,12 +1,14 @@
 import { EventEmitter } from "events";
 import { FSDB } from "file-system-db";
-import { TorrentData } from "./torrentData";
+import { TorrentData, TorrentFileData } from "./torrentData";
 import { join, parse } from "path";
 import { hash } from "crypto";
-import { CONFIG, ConfigCategoryName, DOWNLOAD_DIR, DOWNLOAD_LIMIT } from "../../constants";
+import { CONFIG, ConfigCategoryName, DOWNLOAD_DIR, DOWNLOAD_LIMIT } from "@const";
 import { saveFile } from "./torrentFileSaver";
 import { Service } from "typedi";
-import { rm } from "fs/promises";
+import { existsSync } from "fs";
+import { mkdir, rm } from "fs/promises";
+import { Monitor } from "@service/montor";
 
 import WebTorrent from "webtorrent";
 import _ from "lodash";
@@ -26,8 +28,8 @@ const DOWNLOADS_KEY = "downloads";
 @Service()
 export class TorrentService extends EventEmitter {
 
-    /** Карта, где ключ это хеш магнитный ссылки, а значение это данные торрента */
-    private processed: Record<string, TorrentData> = {};
+    /** Карта, где ключ это хеш, а значение это данные торрента */
+    private _processed: Record<string, TorrentData> = {};
 
     /**
      * Восстанавливает утраченные загрузки
@@ -35,7 +37,7 @@ export class TorrentService extends EventEmitter {
     public async restoreDownloading() {
         const data: Record<string, TorrentStoredData> = DATABASE.get(DOWNLOADS_KEY) ?? {};
         for (const [ hash, storedData ] of Object.entries(data)) {
-            if (this.processed[hash]) {
+            if (this._processed[hash]) {
                 continue;
             }
             try {
@@ -52,12 +54,12 @@ export class TorrentService extends EventEmitter {
      */
     public async download(torrentData: TorrentStoredData): Promise<DownloadResult> {
         const torrentHash = hash("sha256", torrentData.magnet);
-        if (this.processed[torrentHash]) {
-            return { result: "already_downloading", data: this.processed[torrentHash] };
+        if (this._processed[torrentHash]) {
+            return { result: "already_downloading", data: this._processed[torrentHash] };
         } else {
             const data = await this._addToDownload(torrentHash, torrentData);
-            this.processed[torrentHash] = data;
-            data.on("done", () => delete this.processed[torrentHash]);
+            this._processed[torrentHash] = data;
+            data.on("done", () => delete this._processed[torrentHash]);
             return { result: "success", data };
         }
     }
@@ -71,20 +73,22 @@ export class TorrentService extends EventEmitter {
     private _addToDownload(hash: string, data: TorrentStoredData): Promise<TorrentData> {
         return new Promise(async (res, rej) => {
             const category = CONFIG.categories[data.category];
-            const torrentData = new TorrentData(TORRENT_CLIENT.add(data.magnet, { path: join(DOWNLOAD_DIR, hash) }), category, hash, data.data);
-            const pathFunction = new Function(..._.keys(data.additionalData), "filename", "name", 'i', "ext", category.pathFunction);
+            const torrentDirectory = join(DOWNLOAD_DIR, hash);
 
-            // Пиры не найдены
-            torrentData.on("noPeers", () => {
-                // Уведомляем что пиры не найдены
-                return res(torrentData);
-            });
+            if (!existsSync(torrentDirectory)) {
+                await mkdir(torrentDirectory, { recursive: true });
+            }
+
+            const torrentData = new TorrentData(TORRENT_CLIENT.add(data.magnet, { path: torrentDirectory }), category, hash, data.data);
+            const pathFunction = new Function(..._.keys(data.additionalData), "filename", "name", 'i', "ext", category.pathFunction);
+            const montor = new Monitor(this._onDownload.bind(this, hash, torrentData, data, pathFunction), {}, 1000);
 
             // Получение информации о торренте
             torrentData.on("metadata", () => {
-                if (torrentData.files.length === 0) {
+                const files = torrentData.files;
+                if (files.length === 0) {
                     torrentData.destroy();
-                    rej(new TorrentError("Не найдено подходящих для загрузки файлов. "));
+                    rej(new TorrentError("Не найдено подходящих для загрузки файлов"));
                 } else {
                     this._markTorrentAsDownloading(hash, data);
                     res(torrentData);
@@ -93,39 +97,122 @@ export class TorrentService extends EventEmitter {
             
             // Действие при ошибке
             torrentData.on("error", rej);
-
-            // Действие при загрузке данных
-            torrentData.on("download", () => {
-                if (torrentData.ready) {
-                    this.emit("download", torrentData, data);
-                }
-            });
-
             // Действие при завершении загрузки
-            torrentData.on("done", async () => {
-                await Promise.all(
-                    _
-                        .chain(torrentData.files)
-                        .sortBy("path")
-                        .map(({ path }, i) => {
-                            const { name, ext } = parse(path);
-                            return saveFile(data.category, path,
-                                join(data.category, pathFunction(..._.values(data.additionalData), name, data.name, i, ext)),
-                                    data.data);
-                        })
-                    .value()
-                );
-
-                this.emit("done", torrentData, data);
-                this._markTorrentAsDownloaded(hash);
-
-                await rm(torrentData.path, { recursive: true });
-    
-                torrentData.destroy();
-            });
+            torrentData.on("done", montor.call.bind(montor));
+            // Действие при загрузке данных
+            torrentData.on("download", montor.call.bind(montor));
 
             console.log(`Добавлена загрузка ${hash}, ${data.category}, ${data.name}`, data.data);
         });
+    }
+
+    /**
+     * Действие при прогресс загрузки торрента
+     * @param hash         хеш
+     * @param torrentData  данные торрента
+     * @param data         данные для загрузки торрента
+     * @param pathFunction функция получения пути сохраняемого файла
+     * @param montorData   данные монитора
+     */
+    private async _onDownload(hash: string, torrentData: TorrentData, data: TorrentStoredData, pathFunction: Function,
+        montorData: Record<string, boolean>) {
+
+        if (!torrentData.ready) {
+            return;
+        }
+
+        let files = _.sortBy(torrentData.files, "path");
+        let allFilesLoad = true;
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const processedKey = `processed_${i}`;
+            
+            if (file.progress === 100) {
+                if (montorData[processedKey]) {
+                    continue;
+                }
+
+                // Обрабатываем файл
+                await this._onFileDone(file, data, pathFunction, i);
+                
+                // Помечаем файл как обработанный
+                montorData[processedKey] = true;
+            } else {
+                allFilesLoad = false;
+            }
+        }
+
+        if (allFilesLoad) {
+            console.log("Done " + hash);
+            await this._onDone(files, data, pathFunction, hash, torrentData);
+        }
+
+        this.emit("download", torrentData, data);
+    }
+
+    /**
+     * Действие при завершении загрузки файла
+     * @param montorData   данные монитора
+     * @param file         файл загрузка которого завершена
+     * @param data         данные для загрузки торрента
+     * @param pathFunction функция получения пути сохраняемого файла
+     * @param i            индекс файла
+     */
+    private async _onFileDone(file: TorrentFileData, data: TorrentStoredData, pathFunction: Function, i: number) {
+        if (CONFIG.fileSaveStrategy !== "byFile") {
+            return;
+        }
+
+        const pathData = parse(file.path);
+        const pathToFileWillSave = join(data.category, pathFunction(..._.values(data.additionalData),
+            pathData.name, data.name, i, pathData.ext));
+
+        await saveFile(data.category, file.path, pathToFileWillSave, data.data);
+    }
+
+    /**
+     * Действие при полной загрузке торрента
+     * @param files        набор файлов для загрузки
+     * @param data         данные для загрузки торрента
+     * @param pathFunction функция получения пути сохраняемого файла
+     * @param hash         хеш
+     * @param torrentData  данные торрента
+     */
+    private async _onDone(files: TorrentFileData[], data: TorrentStoredData, pathFunction: Function, hash: string, torrentData: TorrentData) {
+        // Отправляем файлы на постобработку
+        await this._onAllFilesDone(files, data, pathFunction);
+
+        this.emit("done", torrentData);
+        this._markTorrentAsDownloaded(hash);
+
+        // Удаляем директорию торрента
+        await rm(torrentData.path, { recursive: true });
+
+        // Очищаем ресурсы
+        torrentData.destroy();
+    }
+
+    /**
+     * Действие при успешной загрузке всех файлов
+     * @param files        загруженные файлы
+     * @param data         данные торрента
+     * @param pathFunction функция получения пути сохраняемого файла
+     */
+    private async _onAllFilesDone(files: TorrentFileData[], data: TorrentStoredData, pathFunction: Function) {
+        if (CONFIG.fileSaveStrategy !== "byTorrent") {
+            return;
+        }
+
+        await Promise.all(
+            files.map(({ path }, i) => {
+                const pathData = parse(path);
+                const pathToFileWillSave = join(data.category, pathFunction(..._.values(data.additionalData),
+                    pathData.name, data.name, i, pathData.ext));
+
+                return saveFile(data.category, path, pathToFileWillSave, data.data);
+            })
+        );
     }
 
     /**

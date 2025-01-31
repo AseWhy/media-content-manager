@@ -2,6 +2,15 @@
     "extends": "../tsconfig.json",
     "include": ["src"],
     "compilerOptions": {
-        "outDir": "dist"
+        "outDir": "dist",
+        "baseUrl": ".",
+        "paths": {
+            "@service": [ "./src/service" ],
+            "@service/*": [ "./src/service/*" ],
+            "@const": [ "./src/constants" ],
+            "@const/*": [ "./src/constants/*" ],
+            "@listeners": [ "./src/listeners" ],
+            "@listeners/*": [ "./src/listeners/*" ]
+        }
     }
 }

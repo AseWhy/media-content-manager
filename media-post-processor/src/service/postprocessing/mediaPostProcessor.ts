@@ -4,8 +4,8 @@ import { Service } from "typedi";
 import { CustomerOrder, CustomerOrderProcessing, MediaProcessor } from "./processors/mediaProcessor";
 import { ProgressData, VideoMediaProcessor } from "./processors/videoMediaProcessor";
 import { rm } from "fs/promises";
-import { CONFIG } from "../../contants";
-import { SpeedIndicator } from "../speedIndicator";
+import { CONFIG } from "@const";
+import { SpeedIndicator } from "@service/speedIndicator";
 
 import EventEmitter from "events";
 import _ from "lodash";

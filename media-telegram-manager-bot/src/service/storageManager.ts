@@ -1,5 +1,5 @@
 import { join, parse } from "path";
-import { MANAGED_DIR } from "../constants";
+import { MANAGED_DIR } from "@const";
 import { Stats } from "fs";
 import { readdir, rename, rm, stat } from "fs/promises";
 import { Service } from "typedi";

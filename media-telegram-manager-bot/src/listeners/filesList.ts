@@ -1,9 +1,9 @@
-import { makePaginationKeyboard } from "../service/keyboard";
-import { FileData, StorageManager } from "../service/storageManager";
-import { listContent } from "../service";
-import { getChatData, updateChatData } from "../service/database";
+import { makePaginationKeyboard } from "@service/keyboard";
+import { FileData, StorageManager } from "@service/storageManager";
+import { listContent } from "@service";
+import { getChatData, updateChatData } from "@service/database";
 import { Container } from "typedi";
-import { CONFIG } from "../constants";
+import { CONFIG } from "@const";
 
 import TelegramBot, { ChatId } from "node-telegram-bot-api";
 import humanFormat from "human-format";

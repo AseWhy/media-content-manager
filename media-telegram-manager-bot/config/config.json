@@ -1,5 +1,6 @@
 {
     "nodeId": "fb018793-247c-4e22-9a3f-b5515cb299c3",
+    "fileSaveStrategy": "byFile",
     "postProcessing": {
         "enabled": true,
         "gateways": ["http://192.168.0.244:1949"],

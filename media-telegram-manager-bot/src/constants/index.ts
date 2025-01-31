@@ -75,6 +75,12 @@ export type ConfigPostprocessing = {
 export type Config = {
     /** Идентификатор текущего узла */
     nodeId: string;
+    /**
+     * Стратегия сохранения файлов
+     * Либо сохранять файл сразу после загрузки
+     * Либо сохранять файл только после полной загрузки всех файлов торрента
+     */
+    fileSaveStrategy: "byFile" | "byTorrent";
     /** Конфигурация постобработки */
     postProcessing: ConfigPostprocessing;
     /** Конфигурация расширений */

@@ -1,4 +1,4 @@
-import { deleteChatData, getChatData, updateChatData } from "./database";
+import { deleteChatData, getChatData, updateChatData } from "@service/database";
 import { Container } from "typedi";
 
 import TelegramBot, { ChatId, EditMessageTextOptions, SendMessageOptions } from "node-telegram-bot-api";

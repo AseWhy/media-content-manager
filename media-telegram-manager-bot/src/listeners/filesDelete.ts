@@ -1,7 +1,7 @@
-import { FileData, StorageManager } from "../service/storageManager";
-import { makeConfirmationKeyboard } from "../service/keyboard";
-import { getChatData } from "../service/database";
-import { FILES_LIST_CHAT_DATA } from "./filesList";
+import { FileData, StorageManager } from "@service/storageManager";
+import { makeConfirmationKeyboard } from "@service/keyboard";
+import { getChatData } from "@service/database";
+import { FILES_LIST_CHAT_DATA } from "@listeners/filesList";
 import { Container } from "typedi";
 
 import TelegramBot, { ChatId, Message } from "node-telegram-bot-api";

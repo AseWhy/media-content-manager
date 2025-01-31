@@ -1,11 +1,11 @@
-import { FileData, StorageManager } from "../service/storageManager";
+import { FileData, StorageManager } from "@service/storageManager";
 import { basename, join, parse } from "path";
-import { cancelable, listContent } from "../service";
-import { makePaginationKeyboard } from "../service/keyboard";
-import { FILES_LIST_CHAT_DATA } from "./filesList";
-import { getChatData } from "../service/database";
+import { cancelable, listContent } from "@service";
+import { makePaginationKeyboard } from "@service/keyboard";
+import { FILES_LIST_CHAT_DATA } from "@listeners/filesList";
+import { getChatData } from "@service/database";
 import { Container } from "typedi";
-import { ChatStateManager } from "../service/telegram/chatStateManager";
+import { ChatStateManager } from "@service/telegram/chatStateManager";
 
 import TelegramBot, { ChatId, Message } from "node-telegram-bot-api";
 

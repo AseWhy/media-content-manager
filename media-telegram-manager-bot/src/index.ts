@@ -2,16 +2,16 @@ import 'reflect-metadata';
 import './context';
 
 import { Container } from "typedi";
-import { BOT_ALLOWED_USER_IDS, BOT_TOKEN, CONFIG, DOWNLOAD_DIR, DOWNLOAD_LIMIT, MANAGED_DIR, PROCESSOR_DIR, PULL_INTERVAL } from "./constants";
-import { filesDelete, KEYBOARD_PREFIX as DELETE_FILES_KEYBOARD_PREFIX, filesDeleteConfirmed } from "./listeners/filesDelete";
-import { filesList, filesListPagable, KEYBOARD_PREFIX as LIST_FILES_KEYBOARD_PREFIX } from "./listeners/filesList";
-import { filesMove, filesMovePagable, KEYBOARD_PREFIX as MOVE_FILES_KEYBOARD_PREFIX } from "./listeners/filesMove";
-import { panel } from './listeners/panel';
-import { filesRename } from "./listeners/filesRename";
-import { start } from "./listeners/start";
-import { upload } from "./listeners/upload";
-import { ProcessingService } from "./service/processing/processingService";
-import { ChatStateManager } from './service/telegram/chatStateManager';
+import { BOT_ALLOWED_USER_IDS, BOT_TOKEN, CONFIG, DOWNLOAD_DIR, DOWNLOAD_LIMIT, MANAGED_DIR, PROCESSOR_DIR, PULL_INTERVAL } from "@const";
+import { filesDelete, KEYBOARD_PREFIX as DELETE_FILES_KEYBOARD_PREFIX, filesDeleteConfirmed } from "@listeners/filesDelete";
+import { filesList, filesListPagable, KEYBOARD_PREFIX as LIST_FILES_KEYBOARD_PREFIX } from "@listeners/filesList";
+import { filesMove, filesMovePagable, KEYBOARD_PREFIX as MOVE_FILES_KEYBOARD_PREFIX } from "@listeners/filesMove";
+import { panel } from '@listeners/panel';
+import { filesRename } from "@listeners/filesRename";
+import { start } from "@listeners/start";
+import { upload } from "@listeners/upload";
+import { ProcessingService } from "@service/processing/processingService";
+import { ChatStateManager } from '@service/telegram/chatStateManager';
 
 import TelegramBot from 'node-telegram-bot-api';
 import EventEmitter from 'events';
