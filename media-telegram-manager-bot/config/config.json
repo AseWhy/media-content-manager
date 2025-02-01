@@ -8,7 +8,7 @@
             "movies": {
                 "outputs": {
                     "mode":    "always",
-                    "names": [ "720p", "1080p", "2160p" ]
+                    "names": [ "scaled-720p", "scaled-1080p", "scaled-2160p" ]
                 },
                 "stream": {
                     "audio": {
@@ -50,7 +50,7 @@
             "tv": {
                 "outputs": {
                     "mode":    "first",
-                    "names": [ "720p", "1080p", "2160p" ]
+                    "names": [ "scaled-720p", "scaled-1080p", "scaled-2160p" ]
                 },
                 "stream": {
                     "audio": {
@@ -70,15 +70,34 @@
     "categories": {
         "movies": {
             "ext":  [ ".mov", ".avi", ".mkv", ".mp4" ],
-            "pathFunction": "return `${name}/${i === 0 ? '' : i + ' '}${name}${ext}`",
+            "pathFunction": "return `${name}${i === 0 ? '' : ' ' + i}${imdbid === '-' ? '' : ` [imdbid-${imdbid}]`}/${name}${imdbid === '-' ? '' : ` [imdbid-${imdbid}]`}${ext}`",
             "name": "Фильмы",
-            "additional": []
+            "additional": [
+                {
+                    "name": "imdbid",
+                    "message": "Введите imdb идентификатор фильма или \"-\", в случае его отсутствия",
+                    "schema": {
+                        "minLength": 1,
+                        "pattern": "^(tt[0-9]+)|(-)$",
+                        "type": "string"
+                    }
+                }
+            ]
         },
         "tv": {
             "ext":  [ ".mov", ".avi", ".mkv", ".mp4" ],
             "name": "Сериалы",
-            "pathFunction": "return `${name}/Season ${season.length !== 2 ? season.padStart(2, '0') : season}/${name} S${season < 10 ? '0' + season : season}E${i < 9 ? '0' + (i + 1) : i + 1}${ext}`",
+            "pathFunction": "return `${name}${imdbid === '-' ? '' : ` [imdbid-${imdbid}]`}/Season ${season.length !== 2 ? season.padStart(2, '0') : season}/${name}${imdbid === '-' ? '' : ` [imdbid-${imdbid}]`} S${season < 10 ? '0' + season : season}E${i < 9 ? '0' + (i + 1) : i + 1}${ext}`",
             "additional": [
+                {
+                    "name": "imdbid",
+                    "message": "Введите imdb идентификатор фильма или \"-\", в случае его отсутствия",
+                    "schema": {
+                        "minLength": 1,
+                        "pattern": "^(tt[0-9]+)|(-)$",
+                        "type": "string"
+                    }
+                },
                 {
                     "name": "season",
                     "message": "Введите номер сезона от 1 до 99.",

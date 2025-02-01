@@ -34,7 +34,7 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
 
         // Исключенные потоки
         const filenameFunction = new Function("filename", "name", "ext", processingConfig.filenameFunction);
-        const outputs = this._extractRequirementOutputConfiguration(outputConfig, width, height, processingConfig.outputs);
+        const outputs = this._extractRequirementOutputConfiguration(outputConfig, width, height);
         const excludedStreams = await this._filterExcludedStreams(streams, processingConfig, stream);
         const directory = join(PROCESSING_DIR, id);
         const result: string[] = [];
@@ -48,10 +48,10 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
             .addInputOptions("-hide_banner", "-v", "warning", "-stats", "-probesize", "10M");
 
         // Добавляем входящие параметры
-        this._addInputOptions(ffmpegBuilder, processingConfig);
+        ffmpegBuilder.addInputOptions(processingConfig.additinalParams.input ?? []);
 
         for (const output of outputs) {
-            const filePath = join(directory, filenameFunction(name, output.name, ".mkv"));
+            const filePath = join(directory, filenameFunction(name, output.config.name, ".mkv"));
 
             ffmpegBuilder
                 .addOutput(filePath)
@@ -65,9 +65,16 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
                 // Исключаем некоторые потоки из входа 0
                 ffmpegBuilder.addOutputOption("-map", `-0:${stream.index}`);
             }
-            
+
             // Добавляем параметры выхода
-            this._addOutputOptions(ffmpegBuilder, processingConfig, output.sampleWidth, output.sampleHeight);
+            ffmpegBuilder.addOutputOptions(_.chain([processingConfig.additinalParams.output, output.params])
+                .flatMap(params => params ? params : [])
+                .map(param => 
+                    param.replace(/\$\{([aA-zZ0-9]+)\}/g, (_a, g1) => {
+                        return output.data[g1];
+                    })
+                )
+                .value());
 
             result.push(filePath);
         }
@@ -118,33 +125,7 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
                 }
             });
         } catch (e) {
-            this.emit("error", orderProcessing, e.message);
-        }
-    }
-
-    /**
-     * Добавляет параметры выхода ffmpeg
-     * @param ffmpegBuilder    билдер задачи ffmpeg
-     * @param processingConfig конфигурация постобработки
-     */
-    private _addInputOptions(ffmpegBuilder: FfmpegCommand, { additinalParams: { input } }: VideoProcessingConfigRule) {
-        if (input) {
-            ffmpegBuilder.addInputOptions(input);
-        }
-    }
-
-    /**
-     * Добавляет входящие параметры ffmpeg
-     * @param ffmpegBuilder    билдер задачи ffmpeg
-     * @param processingConfig конфигурация постобработки
-     * @param sampleWidth      требуемая ширина видеопотока
-     * @param sampleHeight     требуемая высота видеопотока
-     */
-    private _addOutputOptions(ffmpegBuilder: FfmpegCommand, { additinalParams: { output } }: VideoProcessingConfigRule,
-        sampleWidth: number, sampleHeight: number) {
-        if (output) {
-            ffmpegBuilder.addOutputOptions(output.map(option => option.replace("${sampleWidth}", _.toString(sampleWidth))
-                .replace("${sampleHeight}", _.toString(sampleHeight))));
+            this.emit("error", orderProcessing, e);
         }
     }
 
@@ -260,28 +241,22 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
      * @param outputs     конфигурация выходов
      * @returns требуемую конфигурацию видеовыходов
      */
-    private _extractRequirementOutputConfiguration(outputConfig: VideoOutputConfig, width: number, height: number,
-        outputs: VideoProcessingOutputConfig[]): RequirementResolutionConfig[] {
-
+    private _extractRequirementOutputConfiguration(outputConfig: VideoOutputConfig, width: number,
+        height: number): RequirementResolutionConfig[] {
         const result: RequirementResolutionConfig[] = [];
-        const ratio = (width / height).toFixed(2);
 
-        for (const output of outputs) {
-            // Исключаем ненужные выходы
-            if (!outputConfig.names.includes(output.name)) {
+        for (const outputName of outputConfig.names) {
+            const output = CONFIG.outputs[outputName];
+
+            // Выход отключен
+            if (output == null || output.enabled && !Function("width", "height", output.enabled)(width, height)) {
                 continue;
             }
 
-            // Ищем конфигурацию с таким же разрешением экрана
-            const sampleResolution = output.resolutions.find(
-                ([ width, height ]) => (width / height).toFixed(2) === ratio);
-            
-            // Если высота выхода конфигурации больше высоты потока или если конфигурация не найдена
-            if (!sampleResolution || sampleResolution[0] > width) {
-                continue;
-            }
-    
-            result.push({ ...output, sampleWidth: sampleResolution[0], sampleHeight: sampleResolution[1] });
+            // Добавляем конфигурацию выхода
+            result.push({ config: output,
+                data: this._extractData(output, { width, height }),
+                params: this._extractParams(output) });
             
             // Если конфигурация выхода - это первый совпавший выход, то прерываем цикл
             if (outputConfig.mode === "first") {
@@ -290,6 +265,44 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
         }
 
         return result;
+    }
+    /**
+     * Извлекает данные из конфигурации видео выхода
+     * @param output конфигурация видио выхода
+     * @param data   данные
+     * @returns данные видио выхода
+     */
+    private _extractParams(output: VideoProcessingOutputConfig): string[] {
+        const params = output.extend ? this._extractParams(this._getVideoConfig(output.extend)) : [];
+        params.push(...output.additinalParams);
+        return params;
+    }
+
+    /**
+     * Извлекает данные из конфигурации видео выхода
+     * @param output конфигурация видио выхода
+     * @param data   данные
+     * @returns данные видио выхода
+     */
+    private _extractData(output: VideoProcessingOutputConfig, data: Record<string, any> = {}): Record<string, any> {
+        data = output.extend ? this._extractData(this._getVideoConfig(output.extend), data) : data;
+        for (const key in output.data) {
+            data[key] = Function(..._.keys(data), output.data[key])(..._.values(data));
+        }
+        return data;
+    }
+
+    /**
+     * Возвращает конфигурация видио выхода
+     * @param name наименование конфигурации видео выхода
+     * @returns конфигурация видио выхода
+     */
+    private _getVideoConfig(name: string) {
+        const found = CONFIG.outputs[name];
+        if (found == null) {
+            throw new Error(`Не удалось найти видео выход ${name}`);
+        }
+        return found;
     }
 }
 
@@ -314,9 +327,11 @@ export type ProgressData = {
 /**
  * Требуемая конфигурация видео выхода
  */
-type RequirementResolutionConfig = VideoProcessingOutputConfig & {
-    /** Требуемая ширина потока */
-    sampleWidth: number;
-    /** Требуемая высота потока */
-    sampleHeight: number;
+type RequirementResolutionConfig = {
+    /** Конфигурация видео выхода */
+    config: VideoProcessingOutputConfig;
+    /** Параметры выхода */
+    params: string[];
+    /** Данные видео выхода */
+    data: Record<string, any>;
 }

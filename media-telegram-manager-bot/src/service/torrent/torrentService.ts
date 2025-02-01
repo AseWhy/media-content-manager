@@ -116,8 +116,9 @@ export class TorrentService extends EventEmitter {
      */
     private async _onDownload(hash: string, torrentData: TorrentData, data: TorrentStoredData, pathFunction: Function,
         montorData: Record<string, boolean>) {
-
-        if (!torrentData.ready) {
+        
+        // Если торрент ещё не готов к загрузке, или он уже завершен, то не обрабатываем событие загрузки
+        if (!torrentData.ready || montorData['completed']) {
             return;
         }
 
@@ -143,12 +144,12 @@ export class TorrentService extends EventEmitter {
             }
         }
 
-        if (allFilesLoad) {
-            console.log("Done " + hash);
-            await this._onDone(files, data, pathFunction, hash, torrentData);
-        }
-
         this.emit("download", torrentData, data);
+
+        if (allFilesLoad) {
+            await this._onDone(files, data, pathFunction, hash, torrentData);
+            montorData['completed'] = true;
+        }
     }
 
     /**

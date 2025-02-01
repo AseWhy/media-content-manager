@@ -29,7 +29,7 @@ const PROCESSING_SERVICE = Container.get(ProcessingService);
 const BOT = Container.get(TelegramBot);
 
 /** Сообщение при выборе наименования */
-const MESSAGE_NAMING = cancelable(`Пришлите наименование для сохранения файла без расширения. Например: Best Movie Ever (2019) [imdbid-tt2575988]`);
+const MESSAGE_NAMING = cancelable(`Пришлите наименование для сохранения файла без расширения. Например: Best Movie Ever`);
 
 /** Сообщение при выборе категории загрузки */
 const MESSAGE_CATEGORY_LIST = cancelable(listContent(`Выберите тип содержимого`, Object.entries(CONFIG.categories),

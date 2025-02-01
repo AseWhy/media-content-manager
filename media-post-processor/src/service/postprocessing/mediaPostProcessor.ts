@@ -142,8 +142,13 @@ export class MediaPostProcessor extends EventEmitter {
     /**
      * Действие при ошибке
      * @param processing обрабатываемый медиафайл
+     * @param error      ошибка
      */
-    private async _onError(processing: CustomerOrderProcessing) {
+    private async _onError(processing: CustomerOrderProcessing, error: any) {
+        if (error instanceof Error) {
+            // Выводим ошибку в консоль
+            console.error(error.message);
+        }
         if (this._info[processing.customer] == null) {
             this._info[processing.customer] = {};
         }

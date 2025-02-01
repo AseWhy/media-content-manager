@@ -14,9 +14,6 @@ export const PENDING_DIR = process.env.PENDING_DIR ?? tmpdir();
 /** Порт для прослушивания пост обработчика */
 export const APP_PORT = process.env.APP_PORT ?? 1949;
 
-/** Разрешения выхода */
-export type ProcessingResolutions = "720p" | "1080p" | "2160p";
-
 /** Тип обработки */
 export type ProcessingType = "movies" | "tv";
 
@@ -29,6 +26,8 @@ export type VideoCodecType = "audio" | "subtitle";
 export type Config = {
     /** Конфигурация постобработки */
     processing: ProcessingConfig;
+    /** Конфигурация постобработки */
+    outputs: Record<string, VideoProcessingOutputConfig>;
     /** Приоритет процессов постобработки от -20 до 20 */
     priority: number;
     /** Максимальное количество одновременно выполняемых задач пост обработки */
@@ -61,8 +60,6 @@ export type VideoProcessingConfigAdditionalParamsConfig = {
  * Правило постобработки
  */
 export type VideoProcessingConfigRule = {
-    /** Конфигурация постобработки в порядке приоритета (сначала наиболее приоритетные) */
-    outputs: VideoProcessingOutputConfig[];
     /** Функция получения названия выходящего файла */
     filenameFunction: string;
     /** Видео кодек */
@@ -78,7 +75,13 @@ export type VideoProcessingConfigRule = {
  */
 export type VideoProcessingOutputConfig = {
     /** Наименование вывода */
-    name: ProcessingResolutions;
-    /** Разрешения выхода */
-    resolutions: [ number, number ][];
+    name: string;
+    /** Наименование выхода, данные которого должны наследоваться */
+    extend?: string;
+    /** Функция получения состояния выхода */
+    enabled?: string;
+    /** Дополнительные параметры выхода */
+    additinalParams: string[];
+    /** Данные выхода */
+    data: Record<string, string>;
 }

@@ -96,6 +96,7 @@ export class Panel {
      */
     public recreate(): void {
         this._worker.forgetLastMessage();
+        this.__update();
     } 
 
     /**
@@ -174,7 +175,7 @@ export class Panel {
                 }
             } else {
                 processing.push(`${computedName}: ${progressBar.render()} +${data.speed.toFixed(4)}%/S (${data.progress.toFixed(2)}%)${
-                    data.speed && data.progress ? 'до завершения ' + formatDuration((100 - data.progress) / data.speed * 1000) : ""}`);
+                    data.speed && data.progress ? ' до завершения ' + formatDuration((100 - data.progress) / data.speed * 1000) : ""}`);
             }
         }
 
