@@ -21,7 +21,7 @@ export const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
 export const DOWNLOAD_LIMIT = process.env.DOWNLOAD_LIMIT ? parseInt(process.env.DOWNLOAD_LIMIT) : -1;
 
 /** Идентификаторы пользователей, имеющийх возможность скачивать торренты */
-export const BOT_ALLOWED_USER_IDS = process.env.BOT_ALLOWED_USER_IDS?.split(",").map(e => e.trim()).map(parseInt) ?? [974344494];
+export const BOT_ALLOWED_USER_IDS = process.env.BOT_ALLOWED_USER_IDS?.split(",").map(e => e.trim()).map(e => parseInt(e)) ?? [974344494];
 
 /** Конфигурация */
 export const CONFIG: Config = JSON.parse(readFileSync(process.env.CONFIG_LOCATION || "config/config.json").toString("utf8"));
