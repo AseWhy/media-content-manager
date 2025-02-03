@@ -52,8 +52,11 @@ export async function filesMove(msg: Message, splitCommand: string[]) {
         const locations = await STORAGE_MANAGER.filesList(stat => stat.isDirectory());
         const target = basename(file.path);
     
-        await BOT.sendMessage(chatId, createMessage(target, locations), { parse_mode: "HTML", ...makePaginationKeyboard(KEYBOARD_PREFIX, 0,
-            Math.trunc(locations.length / PAGE_SIZE)) });
+        await BOT.sendMessage(chatId, createMessage(target, locations), { parse_mode: "HTML", reply_markup: {
+            inline_keyboard: [
+                makePaginationKeyboard(KEYBOARD_PREFIX, 0, Math.trunc(locations.length / PAGE_SIZE))
+            ]
+        }});
     
         STATE_MANAGER.state(chatId, "file_move", { file, target, locations })
     }
@@ -67,8 +70,11 @@ export async function filesMove(msg: Message, splitCommand: string[]) {
  */
 export async function filesMovePagable(chatId: ChatId, messageId: number, page: number = 0) {
     const { data: { target, locations } } = STATE_MANAGER.getState(chatId);
-    await BOT.editMessageText(createMessage(target, locations, page), { ...makePaginationKeyboard(KEYBOARD_PREFIX, page,
-        Math.trunc(locations.length / PAGE_SIZE)), chat_id: chatId, message_id: messageId, parse_mode: "HTML" })
+    await BOT.editMessageText(createMessage(target, locations, page), { reply_markup: {
+        inline_keyboard: [
+            makePaginationKeyboard(KEYBOARD_PREFIX, page, Math.trunc(locations.length / PAGE_SIZE))
+        ]
+    }, chat_id: chatId, message_id: messageId, parse_mode: "HTML" })
 }
 
 // Слушаем обновление состояния

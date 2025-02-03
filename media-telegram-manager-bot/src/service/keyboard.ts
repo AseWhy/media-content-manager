@@ -1,4 +1,7 @@
 import { EditMessageTextOptions, InlineKeyboardButton, SendMessageOptions } from "node-telegram-bot-api";
+import { FilesListMode } from "@const";
+
+import _ from "lodash";
 
 /**
  * Создает клавиатуру подтверждения
@@ -25,7 +28,7 @@ export function makeConfirmationKeyboard(prefix: string, payload: string): SendM
  * @param total  всего страниц
  * @returns корневая клавиатура
  */
-export function makePaginationKeyboard(prefix: string, page: number, total: number): SendMessageOptions & EditMessageTextOptions {
+export function makePaginationKeyboard(prefix: string, page: number, total: number): InlineKeyboardButton[] {
     const inline_keyboard: InlineKeyboardButton[] = [];
     if (page > 0) {
         inline_keyboard.push(
@@ -39,7 +42,24 @@ export function makePaginationKeyboard(prefix: string, page: number, total: numb
             { text: ">>", callback_data: `${prefix}:${total}` }
         )
     }
-    return {reply_markup: { inline_keyboard: [ inline_keyboard ] }}
+    return inline_keyboard;
+}
+
+/**
+ * Создает клавиатуру выбора режима списка файлов
+ * @param prefix       префикс
+ * @param currentModes массив выбранных режимов отображения
+ * @returns клавиатуру переключения режима отображения файлов
+ */
+export function makeFileListModeKeyboard(prefix: string, currentModes: Array<FilesListMode>) {
+    return [
+        { text: "Отображать файлы" + (currentModes.includes("files") ? " ✅" : ""), callback_data: `${prefix}:${
+            (currentModes.includes("files") ? _.filter(currentModes, e => e !== "files") :
+                _.uniq([ ...currentModes, "files" ])).join(";")}` },
+        { text: "Отображать папки" + (currentModes.includes("directories") ? " ✅" : ""), callback_data: `${prefix}:${
+            (currentModes.includes("directories") ? _.filter(currentModes, e => e !== "directories") :
+                _.uniq([ ...currentModes, "directories" ])).join(";")}` }
+    ]
 }
 
 /**

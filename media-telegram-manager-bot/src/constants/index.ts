@@ -29,6 +29,9 @@ export const CONFIG: Config = JSON.parse(readFileSync(process.env.CONFIG_LOCATIO
 /** Название категории */
 export type ConfigCategoryName = "music" | "tv" | "movies";
 
+/** Тип режима */
+export type FilesListMode = "directories" | "files";
+
 /**
  * Конфигурация доп. данных
  */

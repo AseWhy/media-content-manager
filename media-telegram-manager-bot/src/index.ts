@@ -2,9 +2,9 @@ import 'reflect-metadata';
 import './context';
 
 import { Container } from "typedi";
-import { BOT_ALLOWED_USER_IDS, BOT_TOKEN, CONFIG, DOWNLOAD_DIR, DOWNLOAD_LIMIT, MANAGED_DIR, PROCESSOR_DIR, PULL_INTERVAL } from "@const";
+import { BOT_ALLOWED_USER_IDS, BOT_TOKEN, CONFIG, DOWNLOAD_DIR, DOWNLOAD_LIMIT, FilesListMode, MANAGED_DIR, PROCESSOR_DIR, PULL_INTERVAL } from "@const";
 import { filesDelete, KEYBOARD_PREFIX as DELETE_FILES_KEYBOARD_PREFIX, filesDeleteConfirmed } from "@listeners/filesDelete";
-import { filesList, filesListPagable, KEYBOARD_PREFIX as LIST_FILES_KEYBOARD_PREFIX } from "@listeners/filesList";
+import { FILES_LIST_MODE_PREFIX, filesList, filesListMode, filesListPagable, KEYBOARD_PREFIX as LIST_FILES_KEYBOARD_PREFIX } from "@listeners/filesList";
 import { filesMove, filesMovePagable, KEYBOARD_PREFIX as MOVE_FILES_KEYBOARD_PREFIX } from "@listeners/filesMove";
 import { panel } from '@listeners/panel';
 import { filesRename } from "@listeners/filesRename";
@@ -15,6 +15,7 @@ import { ChatStateManager } from '@service/telegram/chatStateManager';
 
 import TelegramBot from 'node-telegram-bot-api';
 import EventEmitter from 'events';
+import _ from 'lodash';
 
 // Выводим значения переменных
 console.log("MANAGED_DIR", "\t\t", MANAGED_DIR);
@@ -39,11 +40,21 @@ const PROCESSING_SERVICE = Container.get(ProcessingService);
 BOT.on("callback_query", async query => {
     const message = query.message;
     if (message) {
-        const dataSplit = query.data?.split(":") ?? [];
+        const dataSplit = query.data?.split(":", 2) ?? [];
         switch (dataSplit[0]) {
-            case LIST_FILES_KEYBOARD_PREFIX: await filesListPagable(message.chat.id, message.message_id, parseInt(dataSplit[1])); break;
-            case MOVE_FILES_KEYBOARD_PREFIX: await filesMovePagable(message.chat.id, message.message_id, parseInt(dataSplit[1])); break;
-            case DELETE_FILES_KEYBOARD_PREFIX: await filesDeleteConfirmed(message.chat.id, message.message_id, parseInt(dataSplit[1])); break;
+            case LIST_FILES_KEYBOARD_PREFIX:
+                await filesListPagable(message.chat.id, message.message_id, parseInt(dataSplit[1]));
+            break;
+            case FILES_LIST_MODE_PREFIX:
+                await filesListMode(message.chat.id, message.message_id, dataSplit[1].split(";")
+                    .filter(e => !_.isEmpty(e)) as FilesListMode[]);
+            break;
+            case MOVE_FILES_KEYBOARD_PREFIX:
+                await filesMovePagable(message.chat.id, message.message_id, parseInt(dataSplit[1]));
+            break;
+            case DELETE_FILES_KEYBOARD_PREFIX:
+                await filesDeleteConfirmed(message.chat.id, message.message_id, parseInt(dataSplit[1]));
+            break;
         }
     }
 });
@@ -58,13 +69,27 @@ BOT.on("message", async msg => {
         } else {
             const splitMessage = text.split(/[_ ]+/g);
             switch(splitMessage[0]) {
-                case "/start": await start(msg); break;
-                case "/files": await filesList(msg.chat.id, splitMessage[1]); break;
-                case "/delete": await filesDelete(msg, splitMessage); break;
-                case "/panel": panel(msg.chat.id); break;
-                case "/rename": await filesRename(msg, splitMessage); break;
-                case "/move": await filesMove(msg, splitMessage); break;
-                default: STATE_MANAGER.process(msg); break;
+                case "/start":
+                    await start(msg);
+                break;
+                case "/files":
+                    await filesList(msg.chat.id, splitMessage);
+                break;
+                case "/delete":
+                    await filesDelete(msg, splitMessage);
+                break;
+                case "/panel":
+                    panel(msg.chat.id);
+                break;
+                case "/rename":
+                    await filesRename(msg, splitMessage);
+                break;
+                case "/move":
+                    await filesMove(msg, splitMessage);
+                break;
+                default:
+                    STATE_MANAGER.process(msg);
+                break;
             }
         }
     } else {
