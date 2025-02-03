@@ -50,7 +50,7 @@
             "tv": {
                 "outputs": {
                     "mode":    "first",
-                    "names": [ "scaled-720p", "scaled-1080p", "scaled-2160p" ]
+                    "names": [ "scaled-2160p", "scaled-1080p", "scaled-720p" ]
                 },
                 "stream": {
                     "audio": {
