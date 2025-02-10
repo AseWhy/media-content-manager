@@ -119,18 +119,20 @@ export class MediaPostProcessor extends EventEmitter {
     public async pullCompleted(customer: string, process: (completed: CustomerOrderProcessing | null) => Promise<void>): Promise<void> {
         // Ищем первый заказ
         const first = Object.entries(this._getCompleted()).find(item => item[1].customer === customer);
-
         if (first == null || this._activeRequests.has(customer)) {
             process(null);
         } else {
             const [ key, completed ] = first;
+            console.debug(`Начало получения обработанных файлов для зказа ${key}. Файлов в заказе: ${completed.result.length}`);
             try {
                 this._activeRequests.add(customer);
                 await process(completed);
                 if (this._info[customer]) {
                     delete this._info[customer][key];
                 }
+                await rm(completed.directory, { recursive: true });
                 DATABASE.delete(`${COMPLETED_KEY}.${key}`);
+                console.debug(`Конец получения обработанных файлов для зказа ${key}.`);
             } catch(e) {
                 console.error("Ошибка при получении последнего обработанного элемента", e);
             } finally {

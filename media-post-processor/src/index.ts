@@ -42,11 +42,10 @@ APP.get("/pull/files/:customer", (req, response) => {
     MEDIA_POST_PROCESSOR.pullCompleted(
         req.params.customer,
         completed => new Promise((res, rej) => {
+            response.on("finish", res);
             response.on("error", rej);
 
             if (completed) {
-                response.on("finish", () => rm(completed.directory, { recursive: true }).then(res));
-
                 const form = new FormData();
 
                 form.append("_id", completed.id);
@@ -56,10 +55,13 @@ APP.get("/pull/files/:customer", (req, response) => {
                 }
                 
                 // Пишем форму в ответ
-                form.pipe(response.setHeader("Content-Type", `multipart/form-data; boundary=${form.getBoundary()}`),
-                    { end: true });
+                form
+                    .pipe(response
+                        .status(200)
+                        .setHeader("Content-Type", `multipart/form-data; boundary=${form.getBoundary()}`), { end: true })
+                    .on("finish", res)
+                    .on("error", rej);
             } else {
-                response.on("finish", res);
                 response.status(204).end();
             }
         })

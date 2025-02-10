@@ -44,7 +44,7 @@ export async function filesDelete(msg: Message, splitCommand: string[]) {
  * @param fileId    идентификатор файла
  */
 export async function filesDeleteConfirmed(chatId: ChatId, messageId: number, fileId: number) {
-    const files = await STORAGE_MANAGER.filesList();
+    const files = getChatData<FileData[]>(chatId, FILES_LIST_CHAT_DATA);
     const file = files[fileId];
 
     await STORAGE_MANAGER.delete(file.path);

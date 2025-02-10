@@ -7,7 +7,7 @@
                 "width": "return ratio > 1.7777777777777777 ? 3840 : Math.round(2160 * ratio)",
                 "height": "return ratio > 1.7777777777777777 ? Math.round(3840 / ratio) : 2160"
             },
-            "enabled": "return width >= 3840 || height >= 2160",
+            "enabled": "return width >= 3656 || height >= 1716",
             "additinalParams": [],
             "extend": "scaled-output",
             "name":  "2160p"
