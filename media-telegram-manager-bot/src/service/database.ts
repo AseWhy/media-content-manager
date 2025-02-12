@@ -2,7 +2,7 @@ import { FSDB } from "file-system-db";
 import { ChatId } from "node-telegram-bot-api";
 
 /** Хранилище в файловой системе */
-const FILE_SYSTEM_DB = new FSDB("./data/data.json", false);
+const FILE_SYSTEM_DB = new FSDB("./data/data.json");
 
 /**
  * Обновляет данные чата

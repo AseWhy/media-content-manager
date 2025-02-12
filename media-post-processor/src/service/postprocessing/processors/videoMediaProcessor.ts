@@ -10,7 +10,7 @@ import { VaInfo } from "@service/vaInfo";
 
 import EventEmitter from "events";
 import _ from "lodash";
-import ffmpeg, { FfmpegCommand, FfprobeData, FfprobeStream } from "fluent-ffmpeg";
+import ffmpeg, { FfprobeData, FfprobeStream } from "fluent-ffmpeg";
 
 /**
  * пост обработчик видеоконтента
@@ -92,19 +92,29 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
             await new Promise<void>((res, rej) => {
                 try {
                     // Вешаем слушатели на процесс ffmpeg
-                    ffmpegBuilder.once("error", this.emit.bind(this, "error", orderProcessing));
-                    ffmpegBuilder.once('exit', () => console.log('Выход из обработчика видео'));
+                    ffmpegBuilder.once("error", error => {
+                        this.emit("error", orderProcessing, error);
+                        res();
+                    });
+                    // При завершении обработки
                     ffmpegBuilder.once("end", async () => {
                         await this._onDone(orderProcessing);
                         res();
                     });
-                    
-                    // При выводе ошибок
-                    ffmpegBuilder.on("stderr", this._onStdOut.bind(this,));
+                    // При выходе
+                    ffmpegBuilder.once("exit", () => console.log('Выход из обработчика видео'));
 
+                    // При выводе ошибок
+                    ffmpegBuilder.on("stderr", msg => {
+                        if (msg.match(/^Error while processing the decoded data for stream #\d+:\d+$/)) {
+                            ffmpegBuilder.emit("error", msg);
+                        }
+                        // Обрабатываем стандартный вывод
+                        this._onStdOut(msg);
+                    });
                     // Действие при прогрессе загрузки
                     ffmpegBuilder.on("progress", onProgress);
-                    
+            
                     // При выходе из программы убиваем процесс ffmpeg
                     const kill = () => ffmpegBuilder.kill("SIGKILL");
 

@@ -95,21 +95,20 @@ export async function filesListMode(chatId: ChatId, messageId: number, modes: Fi
  */
 function createMessage(files: FileData[], page: number = 0, modes: FilesListMode[]): string {
     const firstIndex = page * PAGE_SIZE;
-    return listContent(`Список файлов. Всего ${files.length} файлов и папок, размером ${humanFormat(files.map(e => e.size).reduce((a, b) => a + b, 0))}`, files.slice(firstIndex, firstIndex + PAGE_SIZE),
+
+    const filesToDisplay = files.slice(firstIndex, firstIndex + PAGE_SIZE).filter(file => modes.includes(file.isFile ? "files" : "directories"));
+    const filesSize = humanFormat(files.map(e => e.size).reduce((a, b) => a + b, 0));
+
+    return listContent(`Список файлов. Отображается ${filesToDisplay.length} из ${files.length} файлов и папок, размером ${filesSize}.`, filesToDisplay,
         (file, index) => {
-            const type: FilesListMode = file.isFile ? "files" : "directories";
-            if (modes.includes(type)) {
-                const result = [ `<code>/${file.path} [${humanFormat(file.size)}]</code>` ];
-                const completedIndex = firstIndex + index;
-                if (file.isFile) {
-                    result.push(`[/delete_${completedIndex}] [/rename_${completedIndex}] [/move_${completedIndex}]\n`);
-                } else {
-                    result.push(`[/delete_${completedIndex}] [/rename_${completedIndex}]\n`);
-                }
-                return result;
+            const result = [ `<code>/${file.path} [${humanFormat(file.size)}]</code>` ];
+            const completedIndex = firstIndex + index;
+            if (file.isFile) {
+                result.push(`[/delete_${completedIndex}] [/rename_${completedIndex}] [/move_${completedIndex}]\n`);
             } else {
-                return [];
+                result.push(`[/delete_${completedIndex}] [/rename_${completedIndex}]\n`);
             }
+            return result;
         });
 }
 

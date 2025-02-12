@@ -147,13 +147,11 @@ export class MediaPostProcessor extends EventEmitter {
      * @param error      ошибка
      */
     private async _onError(processing: CustomerOrderProcessing, error: any) {
-        if (error instanceof Error) {
-            // Выводим ошибку в консоль
-            console.error(error.message);
-        }
         if (this._info[processing.customer] == null) {
             this._info[processing.customer] = {};
         }
+        // Выводим ошибку в консоль
+        console.error(`Ошибка при обработке заказа ${processing.id}: ${error instanceof Error ? error.message : error}`);
         // Редактируем статус обработки
         this._info[processing.customer][processing.id] = { status: "error", progress: 100, speed: 0 };
         // Удаляем из обрабатываемых
