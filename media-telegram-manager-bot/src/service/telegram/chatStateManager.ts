@@ -43,12 +43,12 @@ export class ChatStateManager extends EventEmitter {
      * Обробатывает вхоядщее сообщение
      * @param message входящее сообщение
      */
-    public process(message: Message) {
-        const { state, data } = this.getState(message.chat.id);
+    public process(chatId: ChatId, message: string) {
+        const { state, data } = this.getState(chatId);
         if (state === "no-state") {
             return;
         }
-        this.emit("state:" + state, message, data, { chatId: message.chat.id, message: message.text?.trim() ?? "" });
+        this.emit("state:" + state, data, { chatId, message });
     }
 
     /**

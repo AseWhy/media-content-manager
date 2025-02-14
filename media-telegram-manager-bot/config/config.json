@@ -76,6 +76,7 @@
                 {
                     "name": "imdbid",
                     "message": "Введите imdb идентификатор фильма или \"-\", в случае его отсутствия",
+                    "hint": "return lib.fetchImdbId(name)",
                     "schema": {
                         "minLength": 1,
                         "pattern": "^(tt[0-9]+)|(-)$",
@@ -92,6 +93,7 @@
                 {
                     "name": "imdbid",
                     "message": "Введите imdb идентификатор фильма или \"-\", в случае его отсутствия",
+                    "hint": "return lib.fetchImdbId(name)",
                     "schema": {
                         "minLength": 1,
                         "pattern": "^(tt[0-9]+)|(-)$",

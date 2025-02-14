@@ -78,7 +78,7 @@ export async function filesMovePagable(chatId: ChatId, messageId: number, page: 
 }
 
 // Слушаем обновление состояния
-STATE_MANAGER.on("state:file_move", async (msg: Message, { file, locations }, { chatId, message }) => {
+STATE_MANAGER.on("state:file_move", async ({ file, locations }, { chatId, message }) => {
     if (message == null) {
         await BOT.sendMessage(chatId, MESSAGE_SELECT_MOVE_LOCATION);
     } else {

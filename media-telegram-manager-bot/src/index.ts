@@ -9,7 +9,7 @@ import { filesMove, filesMovePagable, KEYBOARD_PREFIX as MOVE_FILES_KEYBOARD_PRE
 import { panel } from '@listeners/panel';
 import { filesRename } from "@listeners/filesRename";
 import { start } from "@listeners/start";
-import { upload } from "@listeners/upload";
+import { upload, uploadAdditionalData, KEYBOARD_PREFIX as UPLOAD_KEYBOARD_PREFIX } from "@listeners/upload";
 import { ProcessingService } from "@service/processing/processingService";
 import { ChatStateManager } from '@service/telegram/chatStateManager';
 
@@ -55,6 +55,9 @@ BOT.on("callback_query", async query => {
             case DELETE_FILES_KEYBOARD_PREFIX:
                 await filesDeleteConfirmed(message.chat.id, message.message_id, parseInt(dataSplit[1]));
             break;
+            case UPLOAD_KEYBOARD_PREFIX:
+                await uploadAdditionalData(message.chat.id, message.message_id, dataSplit[1]);
+            break;
         }
     }
 });
@@ -88,7 +91,7 @@ BOT.on("message", async msg => {
                     await filesMove(msg, splitMessage);
                 break;
                 default:
-                    STATE_MANAGER.process(msg);
+                    STATE_MANAGER.process(msg.chat.id, msg.text?.trim() ?? "");
                 break;
             }
         }

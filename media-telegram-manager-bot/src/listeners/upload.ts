@@ -2,15 +2,16 @@ import { TorrentError, TorrentService } from "@service/torrent/torrentService";
 import { TorrentData } from "@service/torrent/torrentData";
 import { readFile } from "fs/promises";
 import { PanelDownloadData, PanelManager, PanelPostProcessingData } from "@service/panelManager";
-import { CONFIG, ConfigCategoryName } from "@const";
+import { CONFIG, ConfigCategoryAdditional, ConfigCategoryName, AdditionalDataHint } from "@const";
 import { cancelable, listContent, toLength } from "@service";
 import { validate } from "jsonschema";
 import { ChatStateManager } from "@service/telegram/chatStateManager";
 import { Container } from "typedi";
 import { MediaProgressData, PostProcessCompleteOrder, PostProcessOrder, ProcessingService } from "@service/processing/processingService";
+import { execute } from "@service/execute";
 
 import _ from "lodash";
-import TelegramBot, { Message } from "node-telegram-bot-api";
+import TelegramBot, { ChatId, Message, SendMessageOptions } from "node-telegram-bot-api";
 import parseTorrent, { toMagnetURI } from "parse-torrent";
 
 /** Торрент сервис */
@@ -44,6 +45,9 @@ const MESSAGE_TORRENT_ALREADY_DLOWNLOADING = "Торрент уже загруж
 /** Сообщение "Загрузка добавлена!" */
 const MESSAGE_DOWNLOAD_ADDED = "Загрузка добавлена!";
 
+/** Префикс действий на клавиатуре */
+export const KEYBOARD_PREFIX = "upload";
+
 /**
  * Разбирает полученное сообщение и возвращает объект для загрузки
  * @param msg сообщение
@@ -73,6 +77,7 @@ async function parse(msg: Message): Promise<string | null> {
 export async function upload(msg: Message) {
     const chatId = msg.chat.id;
     const magnet = await parse(msg);
+
     if (magnet == null) {
         return;
     }
@@ -82,8 +87,45 @@ export async function upload(msg: Message) {
     await BOT.sendMessage(chatId, MESSAGE_NAMING);
 }
 
+/**
+ * Обрабатывает ввод дополнительных данных по умолчанию
+ * @param chatId идентификатор чата
+ * @param data   данные
+ */
+export async function uploadAdditionalData(chatId: ChatId, messageId: number, data: string) {
+    // Эмулируем отправку данных пользователем
+    STATE_MANAGER.process(chatId, data);
+    // Очищаем клавиатуру
+    await BOT.editMessageReplyMarkup({ inline_keyboard: [] }, { message_id: messageId, chat_id: chatId });
+    // Отправляем введенные данные
+    await BOT.sendMessage(chatId, data);
+}
+
+/**
+ * Генерирует параметры отправки сообщения для запроса дополнительных данных
+ * @param name       наименование медиафайла
+ * @param category   категория медиафайла
+ * @param additional дополнительные данные
+ * @returns параметры отправки сообщения
+ */
+async function createAdditionalMessageParams(name: string, category: ConfigCategoryName, additional: ConfigCategoryAdditional) {
+    const params: SendMessageOptions = {};
+    if (additional.hint) {
+        const hint: AdditionalDataHint = await execute("name", "category", "additionalData", additional.hint)(name, category, additional);
+        console.log("Предложены варианты подсказки: ", hint);
+        if (hint && hint.length > 0) {
+            params.reply_markup = {
+                inline_keyboard: hint ?
+                hint.map(item => [ { text: item.text, callback_data: `${KEYBOARD_PREFIX}:${item.data}` } ]) :
+                    []
+            }
+        }
+    }
+    return params;
+}
+
 // Обработка получения наименования загрузки
-STATE_MANAGER.on("state:upload_naming", async (msg: Message, { magnet }, { message, chatId }) => {
+STATE_MANAGER.on("state:upload_naming", async ({ magnet }, { message, chatId }) => {
     if (message === '/cancel') {
         await BOT.sendMessage(chatId, MESSAGE_UPLOAD_CANCEL);
         STATE_MANAGER.flush(chatId);
@@ -95,12 +137,12 @@ STATE_MANAGER.on("state:upload_naming", async (msg: Message, { magnet }, { messa
     } else {
         // Запрашиваем дополнительные данные
         STATE_MANAGER.state(chatId, "upload_category", { magnet, name: message });
-        STATE_MANAGER.process(msg);
+        STATE_MANAGER.process(chatId, message);
     }
 });
 
 // Обработку получения категории (фильм, тв шоу, музыка)
-STATE_MANAGER.on("state:upload_category", async (msg: Message, { magnet, name }, { message, chatId }) => {
+STATE_MANAGER.on("state:upload_category", async ({ magnet, name }, { message, chatId }) => {
     if (message === '/cancel') {
         await BOT.sendMessage(chatId, MESSAGE_UPLOAD_CANCEL);
         STATE_MANAGER.flush(chatId);
@@ -111,23 +153,15 @@ STATE_MANAGER.on("state:upload_category", async (msg: Message, { magnet, name },
 
     // Проверяем что категория действиетльная
     if (category in CONFIG.categories) {
-        const categoryData = CONFIG.categories[category as ConfigCategoryName];
-        const additional = categoryData.additional;
-
         STATE_MANAGER.state(chatId, "upload_additional", { magnet, category, name, additionalIdx: 0, additionalData: {} });
-
-        if (_.isEmpty(additional)) {
-            STATE_MANAGER.process(msg);
-        } else {
-            await BOT.sendMessage(chatId, cancelable(additional[0].message));
-        }
+        STATE_MANAGER.process(chatId, message);
     } else {
         await BOT.sendMessage(chatId, MESSAGE_CATEGORY_LIST, { parse_mode: "HTML" });
     }
 });
 
 // Обработку получения дополнительных данных (Сезон, Альбом)
-STATE_MANAGER.on("state:upload_additional", async (msg: Message, { magnet, category, name, additionalIdx, additionalData }, { message, chatId }) => {
+STATE_MANAGER.on("state:upload_additional", async ({ magnet, category, name, additionalIdx, additionalData }, { message, chatId }) => {
     if (message === '/cancel') {
         await BOT.sendMessage(chatId, MESSAGE_UPLOAD_CANCEL);
         STATE_MANAGER.flush(chatId);
@@ -139,17 +173,20 @@ STATE_MANAGER.on("state:upload_additional", async (msg: Message, { magnet, categ
 
     if (additional) {
         if (validate(message, additional.schema).valid) {
+            const nextAdditional = categoryData.additional[additionalIdx + 1];
             STATE_MANAGER.state(chatId, "upload_additional", { magnet, category, name, additionalIdx: additionalIdx + 1,
                 additionalData: { ...additionalData, [additional.name]: message.trim() } });
-            const nextAdditional = categoryData.additional[additionalIdx + 1];
             if (nextAdditional) {
-                await BOT.sendMessage(chatId, cancelable(nextAdditional.message));
+                // Отправляем сообщение
+                await BOT.sendMessage(chatId, cancelable(nextAdditional.message),
+                    await createAdditionalMessageParams(name, category, nextAdditional));
             } else {
                 // В случае, если это последние запрошенные данные то завершаем цикл
-                STATE_MANAGER.process(msg);
+                STATE_MANAGER.process(chatId, message);
             }
         } else {
-            await BOT.sendMessage(chatId, cancelable(additional.message));
+            await BOT.sendMessage(chatId, cancelable(additional.message),
+                await createAdditionalMessageParams(name, category, additional));
         }
     } else {
         try {

@@ -33,6 +33,16 @@ export type ConfigCategoryName = "music" | "tv" | "movies";
 export type FilesListMode = "directories" | "files";
 
 /**
+ * Данные подсказки для зполнения дополнительной информации
+ */
+export type AdditionalDataHint = Array<{
+    /** Данные ответа */
+    data: string;
+    /** Текст ответа */
+    text: string;
+}>;
+
+/**
  * Конфигурация доп. данных
  */
 export type ConfigCategoryAdditional = {
@@ -40,6 +50,8 @@ export type ConfigCategoryAdditional = {
     name: string;
     /** Сообщение пользователю */
     message: string;
+    /** Функция для получения подсказки */
+    hint: string;
     /** Функция обработки введеных данных */
     processor: string;
     /** Схема */

@@ -49,7 +49,7 @@ export async function filesRename(msg: Message, splitCommand: string[]) {
 }
 
 // Слушаем обновление состояния
-STATE_MANAGER.on("state:file_rename", async (msg: Message, { file, name }, { chatId, message }) => {
+STATE_MANAGER.on("state:file_rename", async ({ file, name }, { chatId, message }) => {
     if (message === '/cancel') {
         await BOT.sendMessage(chatId, MESSAGE_RENAME_CANCEL);
         STATE_MANAGER.flush(chatId);
