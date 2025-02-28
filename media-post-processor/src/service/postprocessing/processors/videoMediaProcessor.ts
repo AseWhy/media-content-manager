@@ -13,7 +13,22 @@ import _ from "lodash";
 import ffmpeg, { FfprobeData, FfprobeStream } from "fluent-ffmpeg";
 
 /**
- * пост обработчик видеоконтента
+ * Ошибка обработки видео
+ */
+export class VideoProcessingError extends Error {
+
+    /**
+     * Конструктор
+     * @param parent родительская ошибка
+     * @param probe  данные о медиафайле
+     */
+    constructor(public readonly parent: Error, public readonly probe: FfprobeData) {
+        super(parent.message);
+    }
+}
+
+/**
+ * Пост обработчик видеоконтента
  */
 export class VideoMediaProcessor extends EventEmitter implements MediaProcessor {
 
@@ -28,14 +43,14 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
         const onProgress = _.throttle(this._onProgress.bind(this, id, order), 5000, { trailing: false });
 
         // Данные медиафайла
-        const { streams }: FfprobeData = await ffprobe(order.pathToMedia);
+        const probe: FfprobeData = await ffprobe(order.pathToMedia);
         // Высота и ширина видопотока
-        const { width, height } = this._findVideoStream(streams);
+        const { width, height } = this._findVideoStream(probe.streams);
 
         // Исключенные потоки
         const filenameFunction = new Function("filename", "name", "ext", processingConfig.filenameFunction);
         const outputs = this._extractRequirementOutputConfiguration(outputConfig, width, height);
-        const excludedStreams = await this._filterExcludedStreams(streams, processingConfig, stream);
+        const excludedStreams = await this._filterExcludedStreams(probe.streams, processingConfig, stream);
         const directory = join(PROCESSING_DIR, id);
         const result: string[] = [];
 
@@ -93,7 +108,7 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
                 try {
                     // Вешаем слушатели на процесс ffmpeg
                     ffmpegBuilder.once("error", error => {
-                        this.emit("error", orderProcessing, error);
+                        this.emit("error", orderProcessing, new VideoProcessingError(error, probe));
                         res();
                     });
                     // При завершении обработки
@@ -128,10 +143,10 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
                         // Запускаем обработку
                         ffmpegBuilder.run();
                     } else {
-                        rej(new Error("Не найдены подходящие разрешения для конвертации"));
+                        rej(new VideoProcessingError(new Error("Не найдены подходящие разрешения для конвертации"), probe));
                     }
                 } catch(e) {
-                    rej(e);
+                    rej(new VideoProcessingError(e, probe));
                 }
             });
         } catch (e) {
@@ -203,7 +218,7 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
         config: VideoCustomerStreamConfig) {
 
         const groups = _.groupBy(streams, e => e.codec_type);
-        const result: FfprobeStream[] = [];
+        let result: FfprobeStream[] = [];
 
         if (groups.audio) {
             const streams = groups.audio.filter(stream => !validate(stream, config.audio).valid);
@@ -238,6 +253,20 @@ export class VideoMediaProcessor extends EventEmitter implements MediaProcessor 
                 }
             }
             // TODO: Может добавить обработку других кодеков
+        }
+
+        // Если есть схема фильтрации потоков, то используем её
+        if (CONFIG.excludeStreamsSchema) {
+            for (const stream of streams) {
+                const valid = validate(stream, CONFIG.excludeStreamsSchema).valid;
+                if (valid) {
+                    continue;
+                }
+
+                console.warn(`Поток ${stream.id} был исключен, т.к. не попадает под схему фильтрации.`);
+
+                result.push(stream);
+            }
         }
 
         return _.uniq(result);

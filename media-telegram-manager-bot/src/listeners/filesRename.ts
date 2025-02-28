@@ -1,8 +1,7 @@
-import { FileData, StorageManager } from "@service/storageManager";
+import { StorageManager } from "@service/storageManager";
 import { parse } from "path";
 import { cancelable } from "@service";
-import { getChatData } from "@service/database";
-import { FILES_LIST_CHAT_DATA } from "@listeners/filesList";
+import { getCurrentFileList } from "@listeners/filesList";
 import { Container } from "typedi";
 import { ChatStateManager } from "@service/telegram/chatStateManager";
 
@@ -32,7 +31,7 @@ const MESSAGE_ENTER_NEW_LOCATION = cancelable("Введите новое наи�
  */
 export async function filesRename(msg: Message, splitCommand: string[]) {
     const chatId = msg.chat.id;
-    const files = getChatData<FileData[]>(chatId, FILES_LIST_CHAT_DATA);
+    const { files } = getCurrentFileList(chatId);
     const fileId = splitCommand[1];
 
     if (fileId == null) {

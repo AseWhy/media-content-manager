@@ -1,6 +1,18 @@
 {
     "priority": 20,
     "maxTasks": 2,
+    "excludeStreamsSchema": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+            "codec_name": {
+                "type": "string",
+                "not": {
+                    "const": "mjpeg"
+                }
+            }
+        }
+    },
     "outputs": {
         "scaled-2160p": {
             "data": {

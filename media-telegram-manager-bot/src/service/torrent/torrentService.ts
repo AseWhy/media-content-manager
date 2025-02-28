@@ -9,6 +9,7 @@ import { Service } from "typedi";
 import { existsSync } from "fs";
 import { mkdir, rm } from "fs/promises";
 import { Monitor } from "@service/montor";
+import { PersistentStore, PersistentStoreAdapter } from "@service/persistentStore";
 
 import WebTorrent from "webtorrent";
 import _ from "lodash";
@@ -81,7 +82,8 @@ export class TorrentService extends EventEmitter {
 
             const torrentData = new TorrentData(TORRENT_CLIENT.add(data.magnet, { path: torrentDirectory }), category, hash, data.data);
             const pathFunction = new Function(..._.keys(data.additionalData), "filename", "name", 'i', "ext", category.pathFunction);
-            const montor = new Monitor(this._onDownload.bind(this, hash, torrentData, data, pathFunction), {}, 1000);
+            const store = new PersistentStoreAdapter(DATABASE, "_persistent." + hash);
+            const montor = new Monitor(this._onDownload.bind(this, hash, torrentData, data, pathFunction), 1000, store);
 
             // Получение информации о торренте
             torrentData.on("metadata", () => {
@@ -112,13 +114,13 @@ export class TorrentService extends EventEmitter {
      * @param torrentData  данные торрента
      * @param data         данные для загрузки торрента
      * @param pathFunction функция получения пути сохраняемого файла
-     * @param montorData   данные монитора
+     * @param store        постоянное хранилище
      */
     private async _onDownload(hash: string, torrentData: TorrentData, data: TorrentStoredData, pathFunction: Function,
-        montorData: Record<string, boolean>) {
+        store: PersistentStore) {
         
         // Если торрент ещё не готов к загрузке, или он уже завершен, то не обрабатываем событие загрузки
-        if (!torrentData.ready || montorData['completed']) {
+        if (!torrentData.ready || store.get("completed")) {
             return;
         }
 
@@ -130,15 +132,15 @@ export class TorrentService extends EventEmitter {
             const processedKey = `processed_${i}`;
             
             if (file.progress === 100) {
-                if (montorData[processedKey]) {
+                if (store.get(processedKey)) {
                     continue;
                 }
 
                 // Обрабатываем файл
                 await this._onFileDone(file, data, pathFunction, i);
-                
+
                 // Помечаем файл как обработанный
-                montorData[processedKey] = true;
+                store.set(processedKey, true);
             } else {
                 allFilesLoad = false;
             }
@@ -148,7 +150,7 @@ export class TorrentService extends EventEmitter {
 
         if (allFilesLoad) {
             await this._onDone(files, data, pathFunction, hash, torrentData);
-            montorData['completed'] = true;
+            store.set("completed", true);
         }
     }
 

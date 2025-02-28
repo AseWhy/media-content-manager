@@ -1,4 +1,5 @@
 import { readFileSync } from "fs";
+import { Schema } from "jsonschema";
 import { tmpdir } from "os";
 import { resolve } from "path";
 
@@ -32,6 +33,8 @@ export type Config = {
     priority: number;
     /** Максимальное количество одновременно выполняемых задач пост обработки */
     maxTasks: number;
+    /** Схема фильтрации доступных потоков */
+    excludeStreamsSchema?: Schema;
 }
 
 /**

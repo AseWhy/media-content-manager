@@ -1,7 +1,6 @@
-import { FileData, StorageManager } from "@service/storageManager";
+import { StorageManager } from "@service/storageManager";
 import { makeConfirmationKeyboard } from "@service/keyboard";
-import { getChatData } from "@service/database";
-import { FILES_LIST_CHAT_DATA } from "@listeners/filesList";
+import { getCurrentFileList } from "@listeners/filesList";
 import { Container } from "typedi";
 
 import TelegramBot, { ChatId, Message } from "node-telegram-bot-api";
@@ -24,8 +23,8 @@ const MESSAGE_FILE_ID_NOT_PASSED = "Индекс файла должен быт�
  */
 export async function filesDelete(msg: Message, splitCommand: string[]) {
     const chatId = msg.chat.id;
-    const files = getChatData<FileData[]>(chatId, FILES_LIST_CHAT_DATA);
     const fileId = splitCommand[1];
+    const { files } = getCurrentFileList(chatId);
 
     if (fileId == null) {
         BOT.sendMessage(chatId, MESSAGE_FILE_ID_NOT_PASSED);
@@ -44,7 +43,7 @@ export async function filesDelete(msg: Message, splitCommand: string[]) {
  * @param fileId    идентификатор файла
  */
 export async function filesDeleteConfirmed(chatId: ChatId, messageId: number, fileId: number) {
-    const files = getChatData<FileData[]>(chatId, FILES_LIST_CHAT_DATA);
+    const { files } = getCurrentFileList(chatId);
     const file = files[fileId];
 
     await STORAGE_MANAGER.delete(file.path);

@@ -93,12 +93,12 @@ export async function upload(msg: Message) {
  * @param data   данные
  */
 export async function uploadAdditionalData(chatId: ChatId, messageId: number, data: string) {
-    // Эмулируем отправку данных пользователем
-    STATE_MANAGER.process(chatId, data);
     // Очищаем клавиатуру
     await BOT.editMessageReplyMarkup({ inline_keyboard: [] }, { message_id: messageId, chat_id: chatId });
     // Отправляем введенные данные
     await BOT.sendMessage(chatId, data);
+    // Эмулируем отправку данных пользователем
+    STATE_MANAGER.process(chatId, data);
 }
 
 /**

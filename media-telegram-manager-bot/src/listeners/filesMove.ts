@@ -2,8 +2,7 @@ import { FileData, StorageManager } from "@service/storageManager";
 import { basename, join, parse } from "path";
 import { cancelable, listContent } from "@service";
 import { makePaginationKeyboard } from "@service/keyboard";
-import { FILES_LIST_CHAT_DATA } from "@listeners/filesList";
-import { getChatData } from "@service/database";
+import { getCurrentFileList } from "@listeners/filesList";
 import { Container } from "typedi";
 import { ChatStateManager } from "@service/telegram/chatStateManager";
 
@@ -42,7 +41,7 @@ const MESSAGE_SELECT_MOVE_LOCATION = cancelable(`Выберите директо
  */
 export async function filesMove(msg: Message, splitCommand: string[]) {
     const chatId = msg.chat.id;
-    const files = getChatData<FileData[]>(chatId, FILES_LIST_CHAT_DATA);
+    const { files } = getCurrentFileList(chatId);
     const fileId = splitCommand[1];
 
     if (fileId == null) {

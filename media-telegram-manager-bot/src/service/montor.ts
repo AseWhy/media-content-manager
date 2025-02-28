@@ -1,9 +1,10 @@
 import { setTimeout } from "timers/promises";
+import { PersistentStore } from "./persistentStore";
 
 /**
  * Класс монитора, используется для сохращения количества вызовов к функции монитора
  */
-export class Monitor<D, T extends (data: D) => Promise<any>> {
+export class Monitor<T extends (data: PersistentStore) => Promise<any>> {
 
     /** Текущий вызов монитора */
     private _currentCall: Promise<any> | undefined;
@@ -17,10 +18,10 @@ export class Monitor<D, T extends (data: D) => Promise<any>> {
     /**
      * Конструктор
      * @param _monitorFunc             функция обнолвения параметров монитора
-     * @param [_monitorData=undefined] данные для вызова функции монитора
      * @param [_newCallInterval=0]     интервал вызова функции монитора в мс
+     * @param _store                   хранилище постоянных данных монитора
      */
-    constructor(private readonly _monitorFunc: T, private readonly _monitorData: D, private readonly _newCallInterval: number = 0) {
+    constructor(private readonly _monitorFunc: T, private readonly _newCallInterval: number = 0, private _store: PersistentStore) {
 
     }
 
@@ -37,7 +38,7 @@ export class Monitor<D, T extends (data: D) => Promise<any>> {
         this._lastMonitorCallTime = Date.now();
         this._requiresNewCallAfterComplete = false;
         try {
-            await this._monitorFunc(this._monitorData);
+            await this._monitorFunc(this._store);
         } finally {
             if (this._requiresNewCallAfterComplete) {
                 // Тогда ожидаем ещё и следующий вызов
@@ -57,6 +58,7 @@ export class Monitor<D, T extends (data: D) => Promise<any>> {
         // Обработчик вызова функции монитора
         this._currentCall = this._doCall().finally(() => {
             this._currentCall = undefined;
+            this._store.delete();
         });
     }
 }
