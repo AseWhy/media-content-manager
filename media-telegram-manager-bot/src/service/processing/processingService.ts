@@ -9,6 +9,7 @@ import { mkdir, rm } from "fs/promises";
 import { json } from "stream/consumers";
 import { form, fetch, fetchOnSuccessGatewayResponse } from "../http";
 import { getSystemErrorName } from "util";
+import { resolveDataDir } from "@service";
 import { IncomingMessage } from "http";
 
 import busboy from "busboy";
@@ -17,7 +18,7 @@ import FormData from "form-data";
 import _ from "lodash";
 
 /** База данных обработчика */
-const DATABASE = new FSDB("./data/post-processing.json", false);
+const DATABASE = new FSDB(resolveDataDir("post-processing.json"), false);
 
 /** Ключ обрабатываемых файлов */
 const PROCESSING_KEY = "processing";

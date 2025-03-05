@@ -1,8 +1,9 @@
+import { resolveDataDir } from "@service";
 import { FSDB } from "file-system-db";
 import { ChatId } from "node-telegram-bot-api";
 
 /** Хранилище в файловой системе */
-const FILE_SYSTEM_DB = new FSDB("./data/data.json");
+const FILE_SYSTEM_DB = new FSDB(resolveDataDir("data.json"), false);
 
 /**
  * Обновляет данные чата

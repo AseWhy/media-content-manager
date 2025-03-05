@@ -10,5 +10,5 @@ const BOT = Container.get(TelegramBot);
  * @param msg сообщение
  */
 export async function start(msg: Message) {
-    BOT.sendMessage(msg.chat.id, `Отправь мне магнутную ссылку, или пришли торрент файл, чтобы я его загрузил!`);
+    await BOT.sendMessage(msg.chat.id, `Отправь мне магнутную ссылку, или пришли торрент файл, чтобы я его загрузил!`);
 }

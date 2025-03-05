@@ -1,9 +1,9 @@
 import { StorageManager } from "@service/storageManager";
 import { parse } from "path";
 import { cancelable } from "@service";
-import { getCurrentFileList } from "@listeners/filesList";
 import { Container } from "typedi";
 import { ChatStateManager } from "@service/telegram/chatStateManager";
+import { Files } from "@service/files";
 
 import TelegramBot, { Message } from "node-telegram-bot-api";
 
@@ -31,14 +31,14 @@ const MESSAGE_ENTER_NEW_LOCATION = cancelable("Введите новое наи�
  */
 export async function filesRename(msg: Message, splitCommand: string[]) {
     const chatId = msg.chat.id;
-    const { files } = getCurrentFileList(chatId);
+    const files = new Files(chatId);
     const fileId = splitCommand[1];
 
     if (fileId == null) {
-        BOT.sendMessage(chatId, MESSAGE_FILE_ID_NOT_PASSED);
+        await BOT.sendMessage(chatId, MESSAGE_FILE_ID_NOT_PASSED);
     }
 
-    const file = files[parseInt(fileId)];
+    const file = files.files[parseInt(fileId)];
     const { name } = parse(file.path);
 
     await BOT.sendMessage(chatId, cancelable(`Переименование файла <code>${name}</code>. ${MESSAGE_ENTER_NEW_LOCATION}`),

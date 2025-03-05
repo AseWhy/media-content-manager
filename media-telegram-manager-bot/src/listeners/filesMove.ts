@@ -2,9 +2,9 @@ import { FileData, StorageManager } from "@service/storageManager";
 import { basename, join, parse } from "path";
 import { cancelable, listContent } from "@service";
 import { makePaginationKeyboard } from "@service/keyboard";
-import { getCurrentFileList } from "@listeners/filesList";
 import { Container } from "typedi";
 import { ChatStateManager } from "@service/telegram/chatStateManager";
+import { Files } from "@service/files";
 
 import TelegramBot, { ChatId, Message } from "node-telegram-bot-api";
 
@@ -41,13 +41,13 @@ const MESSAGE_SELECT_MOVE_LOCATION = cancelable(`Выберите директо
  */
 export async function filesMove(msg: Message, splitCommand: string[]) {
     const chatId = msg.chat.id;
-    const { files } = getCurrentFileList(chatId);
     const fileId = splitCommand[1];
 
     if (fileId == null) {
         await BOT.sendMessage(chatId, MESSAGE_FILE_ID_NOT_PASSED);
     } else {
-        const file = files[parseInt(fileId)];
+        const files = new Files(chatId);
+        const file = files.files[parseInt(fileId)];
         const locations = await STORAGE_MANAGER.filesList(stat => stat.isDirectory());
         const target = basename(file.path);
     

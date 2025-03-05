@@ -10,6 +10,7 @@ import { existsSync } from "fs";
 import { mkdir, rm } from "fs/promises";
 import { Monitor } from "@service/montor";
 import { PersistentStore, PersistentStoreAdapter } from "@service/persistentStore";
+import { resolveDataDir } from "@service";
 
 import WebTorrent from "webtorrent";
 import _ from "lodash";
@@ -18,7 +19,7 @@ import _ from "lodash";
 const TORRENT_CLIENT = new WebTorrent({ downloadLimit: DOWNLOAD_LIMIT });
 
 /** Хранилище в файловой системе */
-const DATABASE = new FSDB("./data/torrent.json", false);
+const DATABASE = new FSDB(resolveDataDir("torrent.json"), false);
 
 /** Ключ загружаемых торрент файлов */
 const DOWNLOADS_KEY = "downloads";
@@ -100,7 +101,7 @@ export class TorrentService extends EventEmitter {
             // Действие при ошибке
             torrentData.on("error", rej);
             // Действие при завершении загрузки
-            torrentData.on("done", montor.call.bind(montor));
+            torrentData.on("done", montor.close.bind(montor));
             // Действие при загрузке данных
             torrentData.on("download", montor.call.bind(montor));
 

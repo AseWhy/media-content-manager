@@ -38,65 +38,73 @@ const PROCESSING_SERVICE = Container.get(ProcessingService);
 
 // Действие при получении колбэка
 BOT.on("callback_query", async query => {
-    const message = query.message;
-    if (message) {
-        const dataSplit = query.data?.split(":", 2) ?? [];
-        switch (dataSplit[0]) {
-            case LIST_FILES_KEYBOARD_PREFIX:
-                await filesListPagable(message.chat.id, message.message_id, parseInt(dataSplit[1]));
-            break;
-            case FILES_LIST_MODE_PREFIX:
-                await filesListMode(message.chat.id, message.message_id, dataSplit[1].split(";")
-                    .filter(e => !_.isEmpty(e)) as FilesListMode[]);
-            break;
-            case MOVE_FILES_KEYBOARD_PREFIX:
-                await filesMovePagable(message.chat.id, message.message_id, parseInt(dataSplit[1]));
-            break;
-            case DELETE_FILES_KEYBOARD_PREFIX:
-                await filesDeleteConfirmed(message.chat.id, message.message_id, parseInt(dataSplit[1]));
-            break;
-            case UPLOAD_KEYBOARD_PREFIX:
-                await uploadAdditionalData(message.chat.id, message.message_id, dataSplit[1]);
-            break;
+    try {
+        const message = query.message;
+        if (message) {
+            const dataSplit = query.data?.split(":", 2) ?? [];
+            switch (dataSplit[0]) {
+                case LIST_FILES_KEYBOARD_PREFIX:
+                    await filesListPagable(message.chat.id, message.message_id, parseInt(dataSplit[1]));
+                break;
+                case FILES_LIST_MODE_PREFIX:
+                    await filesListMode(message.chat.id, message.message_id, dataSplit[1].split(";")
+                        .filter(e => !_.isEmpty(e)) as FilesListMode[]);
+                break;
+                case MOVE_FILES_KEYBOARD_PREFIX:
+                    await filesMovePagable(message.chat.id, message.message_id, parseInt(dataSplit[1]));
+                break;
+                case DELETE_FILES_KEYBOARD_PREFIX:
+                    await filesDeleteConfirmed(message.chat.id, message.message_id, parseInt(dataSplit[1]));
+                break;
+                case UPLOAD_KEYBOARD_PREFIX:
+                    await uploadAdditionalData(message.chat.id, message.message_id, dataSplit[1]);
+                break;
+            }
         }
+    } catch(e) {
+        console.error(e.message ? e.message : e);
     }
 });
 
 // Действие при получении сообщения
 BOT.on("message", async msg => {
-    const fromId = msg.from?.id ?? 0;
-    if (BOT_ALLOWED_USER_IDS.includes(fromId)) {
-        const text = msg.text;
-        if (text == null || msg.document || text.match(/(magnet:[aA-zZ?=:0-9&.+_\/%]+)/g)) {
-            await upload(msg);
-        } else {
-            const splitMessage = text.split(/[_ ]+/g);
-            switch(splitMessage[0]) {
-                case "/start":
-                    await start(msg);
-                break;
-                case "/files":
-                    await filesList(msg.chat.id, splitMessage);
-                break;
-                case "/delete":
-                    await filesDelete(msg, splitMessage);
-                break;
-                case "/panel":
-                    panel(msg.chat.id);
-                break;
-                case "/rename":
-                    await filesRename(msg, splitMessage);
-                break;
-                case "/move":
-                    await filesMove(msg, splitMessage);
-                break;
-                default:
-                    STATE_MANAGER.process(msg.chat.id, msg.text?.trim() ?? "");
-                break;
+    try {
+        const fromId = msg.from?.id ?? 0;
+        if (BOT_ALLOWED_USER_IDS.includes(fromId)) {
+            const text = msg.text;
+            if (text == null || msg.document || text.match(/(magnet:[aA-zZ?=:0-9&.+_\/%]+)/g)) {
+                await upload(msg);
+            } else {
+                const splitMessage = text.split(/[_ ]+/g);
+                switch(splitMessage[0]) {
+                    case "/start":
+                        await start(msg);
+                    break;
+                    case "/files":
+                        await filesList(msg.chat.id, splitMessage);
+                    break;
+                    case "/delete":
+                        await filesDelete(msg, splitMessage);
+                    break;
+                    case "/panel":
+                        panel(msg.chat.id);
+                    break;
+                    case "/rename":
+                        await filesRename(msg, splitMessage);
+                    break;
+                    case "/move":
+                        await filesMove(msg, splitMessage);
+                    break;
+                    default:
+                        STATE_MANAGER.process(msg.chat.id, msg.text?.trim() ?? "");
+                    break;
+                }
             }
+        } else {
+            await BOT.sendMessage(msg.chat.id, `Ваш id: ${fromId}!`);
         }
-    } else {
-        await BOT.sendMessage(msg.chat.id, `Ваш id: ${fromId}!`);
+    } catch(e) {
+        console.error(e.message ? e.message : e);
     }
 });
 

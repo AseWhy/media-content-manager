@@ -1,3 +1,6 @@
+import { DATA_DIR } from "@const";
+import { join } from "path";
+
 /**
  * Формирует текстовое сообщение из списка сущностей
  * @param header заголовок списка
@@ -43,4 +46,13 @@ export function toLength(input: string, length: number = 20) {
         input = input.substring(0, length - 3) + "...";
     }
     return input;
+}
+
+/**
+ * Возвращает директорию данных
+ * @param path путь в директории данных
+ * @returns полный путь до директории данных с учетом переданного пути
+ */
+export function resolveDataDir(path: string) {
+    return join(DATA_DIR, path);
 }

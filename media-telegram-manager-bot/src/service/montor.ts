@@ -15,6 +15,9 @@ export class Monitor<T extends (data: PersistentStore) => Promise<any>> {
     /** Метка времени последнего вызова функции монитора */
     private _lastMonitorCallTime: number = 0;
 
+    /** Признак закрытого монитора */
+    private _closed: boolean = false;
+
     /**
      * Конструктор
      * @param _monitorFunc             функция обнолвения параметров монитора
@@ -51,14 +54,26 @@ export class Monitor<T extends (data: PersistentStore) => Promise<any>> {
      * Выполняет запрос на вызов функции монитора
      */
     public call(): void {
+        if (this._closed) {
+            return;
+        }
+
         if (this._currentCall) {
             this._requiresNewCallAfterComplete = true;
             return;
         }
+
         // Обработчик вызова функции монитора
-        this._currentCall = this._doCall().finally(() => {
-            this._currentCall = undefined;
-            this._store.delete();
-        });
+        this._currentCall = this._doCall()
+            .finally(() => this._currentCall = undefined);
+    }
+
+    /**
+     * Завершает работу монитора
+     */
+    public close(): void {
+        this.call();
+        this._closed = true;
+        this._store.delete();
     }
 }

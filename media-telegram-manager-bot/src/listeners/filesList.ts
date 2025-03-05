@@ -1,9 +1,9 @@
 import { makeFileListModeKeyboard, makePaginationKeyboard } from "@service/keyboard";
 import { FileData, StorageManager } from "@service/storageManager";
 import { listContent } from "@service";
-import { getChatData, updateChatData } from "@service/database";
 import { Container } from "typedi";
 import { CONFIG, FilesListMode } from "@const";
+import { Files } from "@service/files";
 
 import TelegramBot, { ChatId } from "node-telegram-bot-api";
 import humanFormat from "human-format";
@@ -11,7 +11,7 @@ import humanFormat from "human-format";
 /** Бот */
 const BOT = Container.get(TelegramBot);
 
-/** Менеджер хранилища */
+/** Бот */
 const STORAGE_MANAGER = Container.get(StorageManager);
 
 /** Размер страницы с файлами */
@@ -23,33 +23,6 @@ export const KEYBOARD_PREFIX = "file_list";
 /** Префикс действий на клавиатуре переключения режима */
 export const FILES_LIST_MODE_PREFIX = "file_list_mode";
 
-/** Ключ данных чата списка файлов */
-export const FILES_LIST_CHAT_DATA = "filesList";
-
-/** Ключ режима чата списка файлов */
-export const FILES_LIST_MODE_CHAT_DATA = "filesList:mode";
-
-/** Ключ страницы чата списка файлов */
-export const FILES_LIST_PAGE_CHAT_DATA = "filesList:page";
-
-/** Режимы отображения файлов по умолчанию */
-const DEFAULT_FILES_LIST_MODE: Array<FilesListMode> = [ "directories", "files" ];
-
-
-/**
- * Возвращает текущий список файлов
- * @param chatId идентификатор чата
- * @param modes  режимы отображения файлов
- * @returns список файлов
- */
-export function getCurrentFileList(chatId: ChatId, modes = getChatData(chatId, FILES_LIST_MODE_CHAT_DATA, DEFAULT_FILES_LIST_MODE)) {
-    const page = getChatData(chatId, FILES_LIST_PAGE_CHAT_DATA, 0);
-    return {
-        files: getChatData<FileData[]>(chatId, FILES_LIST_CHAT_DATA).filter(file => modes.includes(file.isFile ? "files" : "directories")),
-        modes,
-        page
-    };
-}
 
 /**
  * Обрабатывает получение списка файлов
@@ -58,13 +31,11 @@ export function getCurrentFileList(chatId: ChatId, modes = getChatData(chatId, F
  */
 export async function filesList(chatId: ChatId, splitCommand: string[]) {
     const pattern = splitCommand[1] ? new RegExp(splitCommand[1]) : getDefaultRegexpPattern();
-    const modes = getChatData(chatId, FILES_LIST_MODE_CHAT_DATA, DEFAULT_FILES_LIST_MODE);
-    const files = await STORAGE_MANAGER.filesList((stat, path) => stat.isDirectory() || !!path.match(pattern))
-    updateChatData(chatId, FILES_LIST_CHAT_DATA, files);
-    const filesByMode = files.filter(file => modes.includes(file.isFile ? "files" : "directories"));
-    await BOT.sendMessage(chatId, createMessage(filesByMode, 0, modes), { reply_markup: { inline_keyboard: [
-        makePaginationKeyboard(KEYBOARD_PREFIX, 0, Math.trunc(files.length / PAGE_SIZE)),
-        makeFileListModeKeyboard(FILES_LIST_MODE_PREFIX, modes)
+    const files = new Files(chatId);
+    files.files = await STORAGE_MANAGER.filesList((stat, path) => stat.isDirectory() || !!path.match(pattern));
+    await BOT.sendMessage(chatId, createMessage(files.files, 0, files.modes), { reply_markup: { inline_keyboard: [
+        makePaginationKeyboard(KEYBOARD_PREFIX, 0, Math.trunc(files.files.length / PAGE_SIZE)),
+        makeFileListModeKeyboard(FILES_LIST_MODE_PREFIX, files.modes)
     ] }, parse_mode: "HTML" });
 }
 
@@ -75,12 +46,12 @@ export async function filesList(chatId: ChatId, splitCommand: string[]) {
  * @param [page=0]  страница
  */
 export async function filesListPagable(chatId: ChatId, messageId: number, page: number = 0) {
-    const { files, modes } = getCurrentFileList(chatId);
-    updateChatData(chatId, FILES_LIST_PAGE_CHAT_DATA, page);
-    await BOT.editMessageText(createMessage(files, page, modes), { reply_markup: {
+    const files = new Files(chatId);
+    files.page = page;
+    await BOT.editMessageText(createMessage(files.files, page, files.modes), { reply_markup: {
         inline_keyboard: [
-            makePaginationKeyboard(KEYBOARD_PREFIX, page, Math.trunc(files.length / PAGE_SIZE)),
-            makeFileListModeKeyboard(FILES_LIST_MODE_PREFIX, modes)
+            makePaginationKeyboard(KEYBOARD_PREFIX, page, Math.trunc(files.files.length / PAGE_SIZE)),
+            makeFileListModeKeyboard(FILES_LIST_MODE_PREFIX, files.modes)
         ]
     }, chat_id: chatId, message_id: messageId, parse_mode: "HTML" });
 }
@@ -92,11 +63,11 @@ export async function filesListPagable(chatId: ChatId, messageId: number, page: 
  * @param [modes=[]] режимы отображения файлов
  */
 export async function filesListMode(chatId: ChatId, messageId: number, modes: FilesListMode[] = []) {
-    const { files, page } = getCurrentFileList(chatId, modes);
-    updateChatData(chatId, FILES_LIST_MODE_CHAT_DATA, modes);
-    await BOT.editMessageText(createMessage(files, page, modes), { reply_markup: {
+    const files = new Files(chatId);
+    files.modes = modes;
+    await BOT.editMessageText(createMessage(files.files, files.page, modes), { reply_markup: {
         inline_keyboard: [
-            makePaginationKeyboard(KEYBOARD_PREFIX, page, Math.trunc(files.length / PAGE_SIZE)),
+            makePaginationKeyboard(KEYBOARD_PREFIX, files.page, Math.trunc(files.files.length / PAGE_SIZE)),
             makeFileListModeKeyboard(FILES_LIST_MODE_PREFIX, modes)
         ]
     }, chat_id: chatId, message_id: messageId, parse_mode: "HTML" });

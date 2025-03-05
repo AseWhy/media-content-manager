@@ -8,6 +8,9 @@ export const MANAGED_DIR = process.env.MANAGED_DIR ?? "./media";
 /** Директория для загрузки торрентов */
 export const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR ?? "./downloads";
 
+/** Директория данных */
+export const DATA_DIR = process.env.DATA_DIR ?? "./data";
+
 /** Директория, в которую будет выполняться загрузка файлов полученных из пост обработчика */
 export const PROCESSOR_DIR = process.env.PROCESSOR_DIR ?? tmpdir();
 
